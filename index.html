@@ -58,6 +58,12 @@
         .user-info span { display:block; color:var(--muted); font-size:11px; margin-top:3px; }
         .user-type { color:#166534 !important; }
         .reset-button { flex:0 0 auto; border:1px solid #cbd5e1; border-radius:9px; padding:8px 9px; color:#1e40af; background:#eff6ff; font-size:11px; font-weight:800; cursor:pointer; }
+        .request-list { display:grid; gap:9px; margin-top:14px; }
+        .request-row { padding:12px; border:1px solid #fde68a; border-radius:14px; background:#fffbeb; }
+        .request-row strong { display:block; }
+        .request-row small { display:block; color:#92400e; margin-top:4px; }
+        .request-actions { display:flex; gap:7px; margin-top:9px; }
+        .request-actions button { min-height:34px; padding:0 10px; font-size:11px; }
         .lock-note { margin-top:12px; color:var(--muted); font-size:11px; line-height:1.5; }
         @media (max-width:420px) { .search-row { flex-direction:column; } button { min-height:46px; } }
     </style>
@@ -99,6 +105,10 @@
             <section class="card">
                 <h2 style="margin:0;font-size:19px;">အသုံးပြုနေသူများ</h2>
                 <div id="userList" class="user-list"><div class="empty">Data ရယူနေပါသည်...</div></div>
+            </section>
+            <section class="card">
+                <h2 style="margin:0;font-size:19px;">🔔 Password Reset တောင်းဆိုချက်များ</h2>
+                <div id="resetRequestList" class="request-list"><div class="empty">Data ရယူနေပါသည်...</div></div>
             </section>
         </section>
     </main>
@@ -201,6 +211,49 @@
             }
         }
 
+        async function approveResetRequest(id, email) {
+            if (!id || !email) return;
+            try {
+                await auth.sendPasswordResetEmail(email);
+                await db.ref('passwordResetRequests/' + id).update({ status: 'sent', sentAt: new Date().toISOString() });
+                setStatus(`Reset link ကို ${email} သို့ ပို့ပြီးပါပြီ။`);
+                loadResetRequests();
+            } catch (error) {
+                console.error(error);
+                setStatus('Reset link ပို့မရပါ။ Firebase Auth Email/Password setting ကိုစစ်ပါ။', true);
+            }
+        }
+
+        async function loadResetRequests() {
+            const list = document.getElementById('resetRequestList');
+            try {
+                const snapshot = await db.ref('passwordResetRequests').once('value');
+                const requests = Object.entries(snapshot.val() || {})
+                    .map(([id, request]) => ({ id, ...request }))
+                    .sort((a, b) => String(b.requestedAt || '').localeCompare(String(a.requestedAt || '')));
+                if (!requests.length) {
+                    list.innerHTML = '<div class="empty">Reset တောင်းဆိုချက် မရှိသေးပါ။</div>';
+                    return;
+                }
+                list.innerHTML = requests.map(request => {
+                    const sent = request.status === 'sent';
+                    return `<div class="request-row">
+                        <strong>${escapeHtml(request.name || 'User')} · ${escapeHtml(request.email || '')}</strong>
+                        <small>CODE: ${escapeHtml(request.profileCode || '-')} · တောင်းဆိုချိန်: ${escapeHtml(request.requestedAt || '-')}</small>
+                        <div class="request-actions">
+                            ${sent ? '<button type="button" disabled>Reset Email ပို့ပြီး</button>' : `<button type="button" data-request-id="${escapeHtml(request.id)}" data-request-email="${escapeHtml(request.email || '')}">Reset Email ပို့မည်</button>`}
+                        </div>
+                    </div>`;
+                }).join('');
+                list.querySelectorAll('[data-request-id]').forEach(button => {
+                    button.addEventListener('click', () => approveResetRequest(button.dataset.requestId, button.dataset.requestEmail));
+                });
+            } catch (error) {
+                console.error(error);
+                list.innerHTML = '<div class="empty">Reset request ဖတ်မရပါ။ Firebase Rules ကိုစစ်ပါ။</div>';
+            }
+        }
+
         async function loadUsers() {
             setStatus('Firebase မှ user profile data ရယူနေပါသည်...');
             try {
@@ -213,6 +266,7 @@
                 document.getElementById('userCount').innerText = profileUsers.length;
                 document.getElementById('profileCount').innerText = profileUsers.length;
                 renderUserList();
+                await loadResetRequests();
                 setStatus(`Profile data ${profileUsers.length} ယောက် ရှိပါသည်။`);
             } catch (error) {
                 console.error(error);

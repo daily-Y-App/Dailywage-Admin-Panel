@@ -12,12 +12,14 @@ DailyWage Firebase Realtime Database ထဲရှိ profile data ကို စ�
 - Wage နှင့် OT
 - Avatar URL
 - User တစ်ဦးချင်းအတွက် **Reset Email** ပို့ရန် ခလုတ်
+- User က password မေ့ခလုတ်နှိပ်လျှင် Firebase ထဲသိမ်းသော reset request စာရင်း
+- Admin က request ကိုစစ်ပြီး **Reset Email ပို့မည်** ကိုနှိပ်နိုင်ခြင်း
 
 Admin page သည် user password ကို မသိမ်းပါ၊ မပြပါ။ Password ကို Firebase Authentication ကပဲ လုံခြုံစွာ စီမံပါသည်။
 
 ## User account နှင့် password recovery
 
-DailyWage user page တွင် user အသစ်သည် Email နှင့် Password ဖြင့် account ဖန်တီးနိုင်သည်။ Password မေ့သွားပါက user screen lock မှ **Password မေ့သွားပါသလား?** ကိုနှိပ်ပြီး reset link ကို မိမိ Email ထဲသို့ တိုက်ရိုက်ပို့နိုင်သည်။ Admin သည် user directory ထဲက **Reset Email** ခလုတ်ဖြင့်လည်း အဲဒီ user ၏ Email သို့ password အသစ်ပြန်ထားရန် link ပို့ပေးနိုင်သည်။
+DailyWage user page တွင် user အသစ်သည် Email နှင့် Password ဖြင့် account ဖန်တီးနိုင်သည်။ Password မေ့သွားပါက user screen lock မှ **Password မေ့သွားပါသလား?** ကိုနှိပ်ပါ။ Firebase `passwordResetRequests` ထဲတွင် email၊ profile code၊ အမည်နှင့် တောင်းဆိုချိန်ကိုသာ သိမ်းပါမယ်။ Admin page တွင် request ပေါ်လာပြီး Admin က **Reset Email ပို့မည်** ကိုနှိပ်လျှင် Firebase က user ၏ Email ထဲသို့ password အသစ်ထားရန် link ပို့ပေးပါမယ်။
 
 Reset email သည် Firebase Authentication က ပို့ခြင်းဖြစ်ပြီး Admin page သို့မဟုတ် Realtime Database ထဲတွင် password ကို မသိမ်းပါ။
 
