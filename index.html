@@ -35,6 +35,28 @@
         .avatar-url { margin-top:12px; padding:10px; border-radius:10px; background:#f8fafc; color:var(--muted); font-size:11px; overflow-wrap:anywhere; }
         .empty { text-align:center; color:var(--muted); padding:22px 8px; }
         .notice { margin-top:12px; padding:11px 12px; border-radius:10px; background:#fffbeb; border:1px solid #fde68a; color:#92400e; font-size:12px; line-height:1.5; }
+        .pin-card { text-align:center; }
+        .pin-card h2 { margin:0 0 7px; font-size:19px; }
+        .pin-card p { margin:0 0 14px; color:var(--muted); font-size:12px; }
+        .pin-input { width:100%; letter-spacing:5px; text-align:center; }
+        .pin-button { width:100%; min-height:46px; margin-top:10px; }
+        .pin-error { color:#b91c1c; min-height:20px; margin-top:9px; font-size:12px; }
+        .admin-toolbar { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+        .admin-toolbar h2 { margin:0; font-size:19px; }
+        .refresh-button { min-height:38px; padding:0 13px; font-size:12px; }
+        .stats { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; margin-top:14px; }
+        .stat { padding:13px; border-radius:13px; background:linear-gradient(135deg,#eff6ff,#f8fafc); border:1px solid #dbeafe; }
+        .stat small { display:block; color:var(--muted); font-size:11px; margin-bottom:5px; }
+        .stat strong { font-size:22px; color:var(--primary); }
+        .user-list { display:grid; gap:9px; margin-top:14px; }
+        .user-row { display:flex; align-items:center; gap:11px; padding:11px; border:1px solid #e2e8f0; border-radius:14px; background:#fff; }
+        .user-avatar { width:48px; height:48px; flex:0 0 48px; display:grid; place-items:center; overflow:hidden; border-radius:14px; background:#dbeafe; color:var(--primary); font-size:27px; }
+        .user-avatar img { width:100%; height:100%; object-fit:cover; display:block; }
+        .user-info { min-width:0; flex:1; }
+        .user-info strong { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .user-info span { display:block; color:var(--muted); font-size:11px; margin-top:3px; }
+        .user-type { color:#166534 !important; }
+        .lock-note { margin-top:12px; color:var(--muted); font-size:11px; line-height:1.5; }
         @media (max-width:420px) { .search-row { flex-direction:column; } button { min-height:46px; } }
     </style>
 </head>
@@ -45,17 +67,38 @@
             <p>Firebase ထဲရှိ Profile နှင့် Avatar data ကို read-only စစ်ဆေးရန်</p>
         </section>
 
-        <section class="card">
-            <label for="profileCode">Profile Code</label>
-            <div class="search-row">
-                <input id="profileCode" type="text" placeholder="ဥပမာ EMP001" autocomplete="off">
-                <button id="searchButton" type="button" onclick="inspectProfile()">ရှာမည်</button>
-            </div>
-            <div id="status" class="status"></div>
-            <div class="notice">ဤစာမျက်နှာသည် profile code ထည့်ပြီး data တစ်ခုချင်းစီကိုသာ ဖတ်ပါသည်။ Firebase Rules က read permission မပေးထားပါက data မပြနိုင်ပါ။</div>
+        <section id="pinGate" class="card pin-card">
+            <h2>🔐 Admin PIN</h2>
+            <p>Profile directory ကိုကြည့်ရန် PIN ထည့်ပါ။</p>
+            <input id="pinInput" class="pin-input" type="password" inputmode="numeric" maxlength="8" placeholder="PIN" autocomplete="off">
+            <button id="pinButton" class="pin-button" type="button" onclick="unlockAdmin()">ဝင်မည်</button>
+            <div id="pinError" class="pin-error"></div>
+            <div class="lock-note">PIN စစ်ဆေးမှုသည် page အတွင်းတွင်သာ လုပ်ဆောင်သည်။ အမှန်တကယ်လုံခြုံရေးအတွက် Firebase Authentication နှင့် Admin Rules လိုအပ်ပါသည်။</div>
         </section>
 
-        <section id="result" class="card" hidden></section>
+        <section id="adminPanel" hidden>
+            <section class="card">
+                <div class="admin-toolbar">
+                    <h2>👥 User Directory</h2>
+                    <button class="refresh-button" type="button" onclick="loadUsers()">↻ Refresh</button>
+                </div>
+                <div class="stats">
+                    <div class="stat"><small>အသုံးပြုသူစုစုပေါင်း</small><strong id="userCount">0</strong></div>
+                    <div class="stat"><small>Profile data ရှိသူ</small><strong id="profileCount">0</strong></div>
+                </div>
+                <div id="status" class="status"></div>
+                <div class="search-row">
+                    <input id="profileCode" type="text" placeholder="Profile Code ဖြင့်ရှာရန်" autocomplete="off">
+                    <button id="searchButton" type="button" onclick="inspectProfile()">ရှာမည်</button>
+                </div>
+                <div class="notice">Profile အချက်အလက်ထဲမှ အမည်၊ code၊ avatar နှင့် wage/OT ကိုသာ ပြသပါသည်။ Income/expense records အပြည့်အစုံကို မပြပါ။</div>
+            </section>
+            <section id="result" class="card" hidden></section>
+            <section class="card">
+                <h2 style="margin:0;font-size:19px;">အသုံးပြုနေသူများ</h2>
+                <div id="userList" class="user-list"><div class="empty">Data ရယူနေပါသည်...</div></div>
+            </section>
+        </section>
     </main>
 
     <script>
@@ -71,6 +114,9 @@
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
+        const ADMIN_PIN_HASH = '08f8881ee389cd2dbc13b3adb69030273cc675e1d5dac1d58004e70444fb11e4';
+        let profileUsers = [];
+
         function setStatus(message, isError = false) {
             const el = document.getElementById('status');
             el.innerText = message;
@@ -83,73 +129,116 @@
 
         function renderAvatar(profile) {
             const avatar = profile.avatar || profile.av || '👤';
-            if (profile.avatarMode === 'image' && profile.avatarUrl) {
-                return `<img src="${escapeHtml(profile.avatarUrl)}" alt="Profile avatar">`;
-            }
+            if (profile.avatarMode === 'image' && profile.avatarUrl) return `<img src="${escapeHtml(profile.avatarUrl)}" alt="Profile avatar">`;
             return escapeHtml(avatar);
         }
 
-        function renderResult(code, data) {
-            const profile = data.profile || {};
-            const records = data.records ? Object.values(data.records) : [];
-            const incomeCount = records.filter(record => record.type === 'income').length;
-            const expenseCount = records.filter(record => record.type === 'expense').length;
-            const result = document.getElementById('result');
-            result.hidden = false;
-            result.innerHTML = `
-                <div class="profile-head">
-                    <div class="avatar">${renderAvatar(profile)}</div>
-                    <div>
-                        <h2>${escapeHtml(profile.name || 'အမည်မရှိ')}</h2>
-                        <p>CODE: ${escapeHtml(profile.code || code)}</p>
-                    </div>
-                </div>
-                <div class="grid">
-                    <div class="item"><small>တစ်ရက်လုပ်အားခ</small><strong>${escapeHtml(profile.wage || 0)}฿</strong></div>
-                    <div class="item"><small>OT တစ်နာရီခ</small><strong>${escapeHtml(profile.ot || 0)}฿</strong></div>
-                    <div class="item"><small>Avatar အမျိုးအစား</small><strong>${escapeHtml(profile.avatarMode || 'emoji')}</strong></div>
-                    <div class="item"><small>ရွေးထားသော Avatar</small><strong>${escapeHtml(profile.avatar || profile.av || '👤')}</strong></div>
-                    <div class="item"><small>ဝင်ငွေမှတ်တမ်း</small><strong>${incomeCount} ကြိမ်</strong></div>
-                    <div class="item"><small>ထွက်ငွေမှတ်တမ်း</small><strong>${expenseCount} ကြိမ်</strong></div>
-                </div>
-                ${profile.avatarUrl ? `<div class="avatar-url"><strong>Avatar URL:</strong><br>${escapeHtml(profile.avatarUrl)}</div>` : ''}
-                <div class="avatar-url"><strong>နောက်ဆုံး update:</strong> ${escapeHtml(data.lastUpdate || 'မရှိသေးပါ')}</div>
-            `;
+        async function hashPin(pin) {
+            const bytes = new TextEncoder().encode(pin);
+            const digest = await crypto.subtle.digest('SHA-256', bytes);
+            return Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, '0')).join('');
         }
 
-        async function inspectProfile() {
-            const input = document.getElementById('profileCode');
-            const button = document.getElementById('searchButton');
-            const result = document.getElementById('result');
-            const code = input.value.trim();
-            if (!code) return setStatus('Profile Code ထည့်ပေးပါ။', true);
+        async function unlockAdmin() {
+            const input = document.getElementById('pinInput');
+            const button = document.getElementById('pinButton');
+            const error = document.getElementById('pinError');
             button.disabled = true;
-            result.hidden = true;
-            setStatus('Firebase မှ data ရှာဖွေနေပါသည်...');
+            error.innerText = '';
             try {
-                const snapshot = await db.ref('users/' + code).once('value');
-                if (!snapshot.exists()) {
-                    setStatus('ဤ Profile Code အတွက် data မတွေ့ပါ။', true);
+                if ((await hashPin(input.value.trim())) !== ADMIN_PIN_HASH) {
+                    error.innerText = 'PIN မမှန်ပါ။';
+                    input.value = '';
                     return;
                 }
-                renderResult(code, snapshot.val());
-                setStatus('Profile data ကို အောင်မြင်စွာ ဖတ်ပြီးပါပြီ။');
-            } catch (error) {
-                console.error(error);
-                setStatus('Firebase data ဖတ်မရပါ။ Realtime Database Rules ကို စစ်ပေးပါ။', true);
+                sessionStorage.setItem('dailywageAdminUnlocked', '1');
+                document.getElementById('pinGate').hidden = true;
+                document.getElementById('adminPanel').hidden = false;
+                await loadUsers();
+            } catch (err) {
+                console.error(err);
+                error.innerText = 'PIN စစ်ဆေးမရပါ။ HTTPS page ဖြင့် ပြန်ဖွင့်ပါ။';
             } finally {
                 button.disabled = false;
             }
         }
 
-        const codeFromUrl = new URLSearchParams(location.search).get('code');
-        if (codeFromUrl) {
-            document.getElementById('profileCode').value = codeFromUrl;
-            inspectProfile();
+        function renderUserList() {
+            const list = document.getElementById('userList');
+            if (!profileUsers.length) {
+                list.innerHTML = '<div class="empty">Profile data မတွေ့ပါ။</div>';
+                return;
+            }
+            list.innerHTML = profileUsers.map(({ code, data }) => {
+                const profile = data.profile || {};
+                return `<div class="user-row">
+                    <div class="user-avatar">${renderAvatar(profile)}</div>
+                    <div class="user-info">
+                        <strong>${escapeHtml(profile.name || 'အမည်မရှိ')}</strong>
+                        <span>CODE: ${escapeHtml(profile.code || code)}</span>
+                        <span class="user-type">Avatar: ${escapeHtml(profile.avatar || profile.av || '👤')} · ${escapeHtml(profile.avatarMode || 'emoji')}</span>
+                    </div>
+                </div>`;
+            }).join('');
         }
-        document.getElementById('profileCode').addEventListener('keydown', event => {
-            if (event.key === 'Enter') inspectProfile();
-        });
+
+        async function loadUsers() {
+            setStatus('Firebase မှ user profile data ရယူနေပါသည်...');
+            try {
+                const snapshot = await db.ref('users').once('value');
+                const users = snapshot.val() || {};
+                profileUsers = Object.entries(users)
+                    .filter(([, data]) => data && data.profile)
+                    .map(([code, data]) => ({ code, data }))
+                    .sort((a, b) => String(a.data.profile.name || a.code).localeCompare(String(b.data.profile.name || b.code)));
+                document.getElementById('userCount').innerText = profileUsers.length;
+                document.getElementById('profileCount').innerText = profileUsers.length;
+                renderUserList();
+                setStatus(`Profile data ${profileUsers.length} ယောက် ရှိပါသည်။`);
+            } catch (error) {
+                console.error(error);
+                setStatus('User list ဖတ်မရပါ။ Firebase Rules တွင် users path read ခွင့် စစ်ပါ။', true);
+                document.getElementById('userList').innerHTML = '<div class="empty">Firebase Rules ကြောင့် user list မဖတ်နိုင်ပါ။</div>';
+            }
+        }
+
+        function renderResult(code, data) {
+            const profile = data.profile || {};
+            const result = document.getElementById('result');
+            result.hidden = false;
+            result.innerHTML = `<div class="profile-head"><div class="avatar">${renderAvatar(profile)}</div><div><h2>${escapeHtml(profile.name || 'အမည်မရှိ')}</h2><p>CODE: ${escapeHtml(profile.code || code)}</p></div></div>
+                <div class="grid"><div class="item"><small>တစ်ရက်လုပ်အားခ</small><strong>${escapeHtml(profile.wage || 0)}฿</strong></div><div class="item"><small>OT တစ်နာရီခ</small><strong>${escapeHtml(profile.ot || 0)}฿</strong></div><div class="item"><small>Avatar အမျိုးအစား</small><strong>${escapeHtml(profile.avatarMode || 'emoji')}</strong></div><div class="item"><small>ရွေးထားသော Avatar</small><strong>${escapeHtml(profile.avatar || profile.av || '👤')}</strong></div></div>
+                ${profile.avatarUrl ? `<div class="avatar-url"><strong>Avatar URL:</strong><br>${escapeHtml(profile.avatarUrl)}</div>` : ''}`;
+        }
+
+        async function inspectProfile() {
+            const input = document.getElementById('profileCode');
+            const button = document.getElementById('searchButton');
+            const code = input.value.trim();
+            if (!code) return setStatus('Profile Code ထည့်ပေးပါ။', true);
+            button.disabled = true;
+            document.getElementById('result').hidden = true;
+            setStatus('Profile data ရှာဖွေနေပါသည်...');
+            try {
+                const snapshot = await db.ref('users/' + code).once('value');
+                if (!snapshot.exists() || !snapshot.val().profile) return setStatus('ဤ Profile Code အတွက် profile မတွေ့ပါ။', true);
+                renderResult(code, snapshot.val());
+                setStatus('Profile data ကို အောင်မြင်စွာ ဖတ်ပြီးပါပြီ။');
+            } catch (error) {
+                console.error(error);
+                setStatus('Profile data ဖတ်မရပါ။ Firebase Rules ကို စစ်ပေးပါ။', true);
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        document.getElementById('pinInput').addEventListener('keydown', event => { if (event.key === 'Enter') unlockAdmin(); });
+        document.getElementById('profileCode').addEventListener('keydown', event => { if (event.key === 'Enter') inspectProfile(); });
+        if (sessionStorage.getItem('dailywageAdminUnlocked') === '1') {
+            document.getElementById('pinGate').hidden = true;
+            document.getElementById('adminPanel').hidden = false;
+            loadUsers();
+        }
     </script>
 </body>
 </html>

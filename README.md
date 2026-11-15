@@ -1,19 +1,22 @@
 # DailyWage Admin Panel
 
-Firebase Realtime Database ထဲရှိ DailyWage user profile နှင့် avatar data ကို Profile Code ဖြင့် read-only စစ်ဆေးရန် အသုံးပြုသော admin page ဖြစ်သည်။
+DailyWage Firebase Realtime Database ထဲရှိ profile data ကို စစ်ဆေးရန် သီးသန့် admin page ဖြစ်သည်။
+
+## ပါဝင်သောစနစ်များ
+
+- PIN ထည့်ပြီးမှ admin panel ကို unlock လုပ်ခြင်း
+- Firebase `users` path မှ profile ရှိသူအရေအတွက် ပြခြင်း
+- အသုံးပြုနေသူများ၏ အမည်၊ Profile Code နှင့် avatar ပြခြင်း
+- Profile Code ဖြင့် user တစ်ဦးချင်းစီ lookup လုပ်ခြင်း
+- Profile အချက်အလက်ထဲမှ name, code, wage, OT, avatar mode နှင့် avatar URL ကိုသာ ပြခြင်း
+- Firebase data ကို ပြင်ခြင်း၊ ဖျက်ခြင်း မပြုပါ
 
 ## အသုံးပြုနည်း
 
-`index.html` ကို static hosting ဖြင့်ဖွင့်ပြီး Profile Code ထည့်ကာ **ရှာမည်** ကိုနှိပ်ပါ။ ပြသမည့်အချက်များမှာ အမည်၊ code၊ wage၊ OT၊ avatar အမျိုးအစား၊ ရွေးထားသော avatar၊ avatar URL၊ income/expense record အရေအတွက်နှင့် နောက်ဆုံး update ဖြစ်သည်။
+`index.html` ကိုဖွင့်ပြီး PIN ထည့်ပါ။ Unlock ပြီးလျှင် user count နှင့် profile list ကို Firebase မှ ဖတ်ပြပါမယ်။ Profile Code ရှာဖွေရန် search box ကို အသုံးပြုနိုင်သည်။
 
-Profile Code ကို URL မှလည်း ပေးနိုင်သည်။
+## အရေးကြီးသော လုံခြုံရေးမှတ်ချက်
 
-```text
-/index.html?code=EMP001
-```
+ဒီ page သည် static client-side page ဖြစ်သောကြောင့် PIN ကို browser source ကိုကြည့်ပြီး ကျော်လွှားနိုင်ပါသည်။ PIN gate သည် ရိုးရှင်းသော access filter သာဖြစ်ပြီး အမှန်တကယ် admin security မဟုတ်ပါ။ အများပြည်သူသို့ အသုံးပြုမည်ဆိုလျှင် Firebase Authentication, custom claims နှင့် admin-only Realtime Database Rules ထည့်သွင်းရန် လိုအပ်သည်။
 
-## Firebase Rules မှတ်ချက်
-
-ဤစာမျက်နှာသည် client-side read-only lookup ဖြစ်သည်။ Firebase Realtime Database Rules က `users/{profileCode}` ကို read ခွင့်မပေးထားပါက data မပြနိုင်ပါ။ အများပြည်သူသို့ မဖွင့်မီ Firebase Authentication နှင့် admin-only rules ထည့်သွင်းရန် အကြံပြုသည်။
-
-ဤ panel သည် Firebase data ကို ပြင်ခြင်း၊ ဖျက်ခြင်း မပြုပါ။
+GitHub Pages deployment workflow ကို `.github/workflows/pages.yml` တွင် ထည့်ထားသည်။
