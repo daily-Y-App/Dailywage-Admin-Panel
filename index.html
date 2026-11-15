@@ -6,6 +6,7 @@
     <title>DailyWage Admin Profile Inspector</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
     <style>
         :root { --primary:#1a2a6c; --secondary:#b21f1f; --bg:#f1f5f9; --text:#1e293b; --muted:#64748b; }
         * { box-sizing:border-box; }
@@ -56,6 +57,7 @@
         .user-info strong { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .user-info span { display:block; color:var(--muted); font-size:11px; margin-top:3px; }
         .user-type { color:#166534 !important; }
+        .reset-button { flex:0 0 auto; border:1px solid #cbd5e1; border-radius:9px; padding:8px 9px; color:#1e40af; background:#eff6ff; font-size:11px; font-weight:800; cursor:pointer; }
         .lock-note { margin-top:12px; color:var(--muted); font-size:11px; line-height:1.5; }
         @media (max-width:420px) { .search-row { flex-direction:column; } button { min-height:46px; } }
     </style>
@@ -113,6 +115,7 @@
         };
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
+        const auth = firebase.auth();
 
         const ADMIN_PIN_HASH = '08f8881ee389cd2dbc13b3adb69030273cc675e1d5dac1d58004e70444fb11e4';
         let profileUsers = [];
@@ -179,8 +182,23 @@
                         <span>${escapeHtml(profile.email || 'Email မချိတ်ရသေးပါ')}</span>
                         <span class="user-type">Avatar: ${escapeHtml(profile.avatar || profile.av || '👤')} · ${escapeHtml(profile.avatarMode || 'emoji')}</span>
                     </div>
+                    ${profile.email ? `<button class="reset-button" type="button" data-reset-email="${escapeHtml(profile.email)}">Reset Email</button>` : ''}
                 </div>`;
             }).join('');
+            list.querySelectorAll('[data-reset-email]').forEach(button => {
+                button.addEventListener('click', () => sendResetEmail(button.dataset.resetEmail));
+            });
+        }
+
+        async function sendResetEmail(email) {
+            if (!email) return;
+            try {
+                await auth.sendPasswordResetEmail(email);
+                setStatus(`Password reset link ကို ${email} သို့ ပို့ပြီးပါပြီ။`);
+            } catch (error) {
+                console.error(error);
+                setStatus('Reset email ပို့မရပါ။ Firebase Auth Email/Password setting ကိုစစ်ပါ။', true);
+            }
         }
 
         async function loadUsers() {

@@ -11,18 +11,19 @@ DailyWage Firebase Realtime Database ထဲရှိ profile data ကို စ�
 - Avatar/Emoji
 - Wage နှင့် OT
 - Avatar URL
+- User တစ်ဦးချင်းအတွက် **Reset Email** ပို့ရန် ခလုတ်
 
 Admin page သည် user password ကို မသိမ်းပါ၊ မပြပါ။ Password ကို Firebase Authentication ကပဲ လုံခြုံစွာ စီမံပါသည်။
 
-## User page Screen Lock
+## User account နှင့် password recovery
 
-DailyWage Profile tab တွင် Email နှင့် Password ချိတ်ပြီးနောက် user page သည် Firebase Email/Password login မအောင်မြင်မချင်း screen lock ပြပါမယ်။ Login အောင်မြင်ပြီးမှသာ ရှိပြီးသား income, expense, history, balance နှင့် profile စနစ်များကို အသုံးပြုနိုင်ပါမယ်။
+DailyWage user page တွင် user အသစ်သည် Email နှင့် Password ဖြင့် account ဖန်တီးနိုင်သည်။ Password မေ့သွားပါက user screen lock မှ **Password မေ့သွားပါသလား?** ကိုနှိပ်ပြီး reset link ကို မိမိ Email ထဲသို့ တိုက်ရိုက်ပို့နိုင်သည်။ Admin သည် user directory ထဲက **Reset Email** ခလုတ်ဖြင့်လည်း အဲဒီ user ၏ Email သို့ password အသစ်ပြန်ထားရန် link ပို့ပေးနိုင်သည်။
 
-Firebase Auth session ကို browser session အတွင်းသာ အသုံးပြုထားသောကြောင့် session ပြီးဆုံးပြီး ပြန်ဖွင့်လျှင် login ပြန်တောင်းပါမယ်။
+Reset email သည် Firebase Authentication က ပို့ခြင်းဖြစ်ပြီး Admin page သို့မဟုတ် Realtime Database ထဲတွင် password ကို မသိမ်းပါ။
 
 ## Firebase Console ပြင်ဆင်ရန်
 
-Firebase Console → **Authentication → Sign-in method → Email/Password** ကို Enable လုပ်ထားရပါမည်။ Realtime Database Rules တွင် app user profile data အတွက် လိုအပ်သော read/write permission ထည့်ထားရပါမည်။
+Firebase Console → **Authentication → Sign-in method → Email/Password** ကို Enable လုပ်ထားရပါမည်။ Firebase Authentication → **Templates** တွင် password-reset email စာသားကို ပြင်နိုင်သည်။ Realtime Database Rules တွင် app user profile data အတွက် လိုအပ်သော read/write permission ထည့်ထားရပါမည်။
 
 ## Security မှတ်ချက်
 
