@@ -6,7 +6,6 @@
     <title>DailyWage Admin Profile Inspector</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
     <style>
         :root { --primary:#1a2a6c; --secondary:#b21f1f; --bg:#f1f5f9; --text:#1e293b; --muted:#64748b; }
         * { box-sizing:border-box; }
@@ -57,13 +56,6 @@
         .user-info strong { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .user-info span { display:block; color:var(--muted); font-size:11px; margin-top:3px; }
         .user-type { color:#166534 !important; }
-        .reset-button { flex:0 0 auto; border:1px solid #cbd5e1; border-radius:9px; padding:8px 9px; color:#1e40af; background:#eff6ff; font-size:11px; font-weight:800; cursor:pointer; }
-        .request-list { display:grid; gap:9px; margin-top:14px; }
-        .request-row { padding:12px; border:1px solid #fde68a; border-radius:14px; background:#fffbeb; }
-        .request-row strong { display:block; }
-        .request-row small { display:block; color:#92400e; margin-top:4px; }
-        .request-actions { display:flex; gap:7px; margin-top:9px; }
-        .request-actions button { min-height:34px; padding:0 10px; font-size:11px; }
         .lock-note { margin-top:12px; color:var(--muted); font-size:11px; line-height:1.5; }
         @media (max-width:420px) { .search-row { flex-direction:column; } button { min-height:46px; } }
     </style>
@@ -106,10 +98,6 @@
                 <h2 style="margin:0;font-size:19px;">အသုံးပြုနေသူများ</h2>
                 <div id="userList" class="user-list"><div class="empty">Data ရယူနေပါသည်...</div></div>
             </section>
-            <section class="card">
-                <h2 style="margin:0;font-size:19px;">🔔 Password Reset တောင်းဆိုချက်များ</h2>
-                <div id="resetRequestList" class="request-list"><div class="empty">Data ရယူနေပါသည်...</div></div>
-            </section>
         </section>
     </main>
 
@@ -125,7 +113,6 @@
         };
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
-        const auth = firebase.auth();
 
         const ADMIN_PIN_HASH = '08f8881ee389cd2dbc13b3adb69030273cc675e1d5dac1d58004e70444fb11e4';
         let profileUsers = [];
@@ -192,66 +179,8 @@
                         <span>${escapeHtml(profile.email || 'Email မချိတ်ရသေးပါ')}</span>
                         <span class="user-type">Avatar: ${escapeHtml(profile.avatar || profile.av || '👤')} · ${escapeHtml(profile.avatarMode || 'emoji')}</span>
                     </div>
-                    ${profile.email ? `<button class="reset-button" type="button" data-reset-email="${escapeHtml(profile.email)}">Reset Email</button>` : ''}
                 </div>`;
             }).join('');
-            list.querySelectorAll('[data-reset-email]').forEach(button => {
-                button.addEventListener('click', () => sendResetEmail(button.dataset.resetEmail));
-            });
-        }
-
-        async function sendResetEmail(email) {
-            if (!email) return;
-            try {
-                await auth.sendPasswordResetEmail(email);
-                setStatus(`Password reset link ကို ${email} သို့ ပို့ပြီးပါပြီ။`);
-            } catch (error) {
-                console.error(error);
-                setStatus('Reset email ပို့မရပါ။ Firebase Auth Email/Password setting ကိုစစ်ပါ။', true);
-            }
-        }
-
-        async function approveResetRequest(id, email) {
-            if (!id || !email) return;
-            try {
-                await auth.sendPasswordResetEmail(email);
-                await db.ref('passwordResetRequests/' + id).update({ status: 'sent', sentAt: new Date().toISOString() });
-                setStatus(`Reset link ကို ${email} သို့ ပို့ပြီးပါပြီ။`);
-                loadResetRequests();
-            } catch (error) {
-                console.error(error);
-                setStatus('Reset link ပို့မရပါ။ Firebase Auth Email/Password setting ကိုစစ်ပါ။', true);
-            }
-        }
-
-        async function loadResetRequests() {
-            const list = document.getElementById('resetRequestList');
-            try {
-                const snapshot = await db.ref('passwordResetRequests').once('value');
-                const requests = Object.entries(snapshot.val() || {})
-                    .map(([id, request]) => ({ id, ...request }))
-                    .sort((a, b) => String(b.requestedAt || '').localeCompare(String(a.requestedAt || '')));
-                if (!requests.length) {
-                    list.innerHTML = '<div class="empty">Reset တောင်းဆိုချက် မရှိသေးပါ။</div>';
-                    return;
-                }
-                list.innerHTML = requests.map(request => {
-                    const sent = request.status === 'sent';
-                    return `<div class="request-row">
-                        <strong>${escapeHtml(request.name || 'User')} · ${escapeHtml(request.email || '')}</strong>
-                        <small>CODE: ${escapeHtml(request.profileCode || '-')} · တောင်းဆိုချိန်: ${escapeHtml(request.requestedAt || '-')}</small>
-                        <div class="request-actions">
-                            ${sent ? '<button type="button" disabled>Reset Email ပို့ပြီး</button>' : `<button type="button" data-request-id="${escapeHtml(request.id)}" data-request-email="${escapeHtml(request.email || '')}">Reset Email ပို့မည်</button>`}
-                        </div>
-                    </div>`;
-                }).join('');
-                list.querySelectorAll('[data-request-id]').forEach(button => {
-                    button.addEventListener('click', () => approveResetRequest(button.dataset.requestId, button.dataset.requestEmail));
-                });
-            } catch (error) {
-                console.error(error);
-                list.innerHTML = '<div class="empty">Reset request ဖတ်မရပါ။ Firebase Rules ကိုစစ်ပါ။</div>';
-            }
         }
 
         async function loadUsers() {
@@ -266,7 +195,6 @@
                 document.getElementById('userCount').innerText = profileUsers.length;
                 document.getElementById('profileCount').innerText = profileUsers.length;
                 renderUserList();
-                await loadResetRequests();
                 setStatus(`Profile data ${profileUsers.length} ယောက် ရှိပါသည်။`);
             } catch (error) {
                 console.error(error);
