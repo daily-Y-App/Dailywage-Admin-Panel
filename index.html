@@ -6,7 +6,6 @@
     <title>DailyWage Admin Profile Inspector</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
     <style>
         :root { --primary:#1a2a6c; --secondary:#b21f1f; --bg:#f1f5f9; --text:#1e293b; --muted:#64748b; }
         * { box-sizing:border-box; }
@@ -70,10 +69,8 @@
 
         <section id="pinGate" class="card pin-card">
             <h2>🔐 Admin PIN</h2>
-            <p>Profile directory ကိုကြည့်ရန် PIN နှင့် Firebase Email/Password ထည့်ပါ။</p>
+            <p>Profile directory ကိုကြည့်ရန် Admin PIN ထည့်ပါ။</p>
             <input id="pinInput" class="pin-input" type="password" inputmode="numeric" maxlength="8" placeholder="PIN" autocomplete="off">
-            <input id="adminEmail" type="email" placeholder="Admin Email" autocomplete="username" style="width:100%;margin-top:10px;">
-            <input id="adminPassword" type="password" placeholder="Password" autocomplete="current-password" style="width:100%;margin-top:10px;">
             <button id="pinButton" class="pin-button" type="button" onclick="unlockAdmin()">ဝင်မည်</button>
             <div id="pinError" class="pin-error"></div>
             <div class="lock-note">PIN စစ်ဆေးမှုသည် page အတွင်းတွင်သာ လုပ်ဆောင်သည်။ အမှန်တကယ်လုံခြုံရေးအတွက် Firebase Authentication နှင့် Admin Rules လိုအပ်ပါသည်။</div>
@@ -116,7 +113,6 @@
         };
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
-        const auth = firebase.auth();
 
         const ADMIN_PIN_HASH = '08f8881ee389cd2dbc13b3adb69030273cc675e1d5dac1d58004e70444fb11e4';
         let profileUsers = [];
@@ -145,8 +141,6 @@
 
         async function unlockAdmin() {
             const input = document.getElementById('pinInput');
-            const email = document.getElementById('adminEmail').value.trim().toLowerCase();
-            const password = document.getElementById('adminPassword').value;
             const button = document.getElementById('pinButton');
             const error = document.getElementById('pinError');
             button.disabled = true;
@@ -157,20 +151,13 @@
                     input.value = '';
                     return;
                 }
-                if (!email || !password) {
-                    error.innerText = 'Email နှင့် Password နှစ်ခုလုံးထည့်ပါ။';
-                    return;
-                }
-                await auth.signInWithEmailAndPassword(email, password);
                 sessionStorage.setItem('dailywageAdminUnlocked', '1');
                 document.getElementById('pinGate').hidden = true;
                 document.getElementById('adminPanel').hidden = false;
                 await loadUsers();
             } catch (err) {
                 console.error(err);
-                error.innerText = err.code === 'auth/operation-not-allowed'
-                    ? 'Firebase Console မှာ Email/Password Sign-in ကို Enable လုပ်ပေးပါ။'
-                    : 'PIN သို့မဟုတ် Email/Password မမှန်ပါ။';
+                error.innerText = 'PIN စစ်ဆေးမရပါ။ HTTPS page ဖြင့် ပြန်ဖွင့်ပါ။';
             } finally {
                 button.disabled = false;
             }
@@ -248,13 +235,11 @@
 
         document.getElementById('pinInput').addEventListener('keydown', event => { if (event.key === 'Enter') unlockAdmin(); });
         document.getElementById('profileCode').addEventListener('keydown', event => { if (event.key === 'Enter') inspectProfile(); });
-        auth.onAuthStateChanged(user => {
-            if (user && sessionStorage.getItem('dailywageAdminUnlocked') === '1') {
-                document.getElementById('pinGate').hidden = true;
-                document.getElementById('adminPanel').hidden = false;
-                loadUsers();
-            }
-        });
+        if (sessionStorage.getItem('dailywageAdminUnlocked') === '1') {
+            document.getElementById('pinGate').hidden = true;
+            document.getElementById('adminPanel').hidden = false;
+            loadUsers();
+        }
     </script>
 </body>
 </html>
