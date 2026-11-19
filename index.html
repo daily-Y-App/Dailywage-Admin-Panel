@@ -6,6 +6,7 @@
     <title>DailyWage Admin Profile Inspector</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
     <style>
         :root { --primary:#1a2a6c; --secondary:#b21f1f; --bg:#f1f5f9; --text:#1e293b; --muted:#64748b; }
         * { box-sizing:border-box; }
@@ -85,6 +86,7 @@
                 <div class="stats">
                     <div class="stat"><small>အသုံးပြုသူစုစုပေါင်း</small><strong id="userCount">0</strong></div>
                     <div class="stat"><small>Profile data ရှိသူ</small><strong id="profileCount">0</strong></div>
+                    <div class="stat"><small>Device registry</small><strong id="deviceCount">0</strong></div>
                 </div>
                 <div id="status" class="status"></div>
                 <div class="search-row">
@@ -113,9 +115,20 @@
         };
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
+        const firestore = firebase.firestore();
 
         const ADMIN_PIN_HASH = '08f8881ee389cd2dbc13b3adb69030273cc675e1d5dac1d58004e70444fb11e4';
         let profileUsers = [];
+
+        async function loadDeviceCount() {
+            try {
+                const snapshot = await firestore.collection('devices').get();
+                document.getElementById('deviceCount').innerText = snapshot.size;
+            } catch (error) {
+                console.warn('Device registry read failed:', error);
+                document.getElementById('deviceCount').innerText = profileUsers.filter(item => item.data.profile.deviceId).length;
+            }
+        }
 
         function setStatus(message, isError = false) {
             const el = document.getElementById('status');
@@ -177,6 +190,7 @@
                         <strong>${escapeHtml(profile.name || 'အမည်မရှိ')}</strong>
                         <span>CODE: ${escapeHtml(profile.code || code)}</span>
                         <span>${escapeHtml(profile.email || 'Email မချိတ်ရသေးပါ')}</span>
+                        <span>Device: ${escapeHtml(profile.deviceId ? profile.deviceId.slice(0, 18) + '…' : 'မမှတ်ထားရသေးပါ')}</span>
                         <span class="user-type">Avatar: ${escapeHtml(profile.avatar || profile.av || '👤')} · ${escapeHtml(profile.avatarMode || 'emoji')}</span>
                     </div>
                 </div>`;
@@ -188,13 +202,21 @@
             try {
                 const snapshot = await db.ref('users').once('value');
                 const users = snapshot.val() || {};
-                profileUsers = Object.entries(users)
+                const entries = Object.entries(users)
                     .filter(([, data]) => data && data.profile)
                     .map(([code, data]) => ({ code, data }))
                     .sort((a, b) => String(a.data.profile.name || a.code).localeCompare(String(b.data.profile.name || b.code)));
+                const uniqueDevices = new Map();
+                entries.forEach(entry => {
+                    const key = entry.data.profile.deviceId ? `device:${entry.data.profile.deviceId}` : `code:${entry.code}`;
+                    const previous = uniqueDevices.get(key);
+                    if (!previous || String(entry.data.lastUpdate || '') > String(previous.data.lastUpdate || '')) uniqueDevices.set(key, entry);
+                });
+                profileUsers = Array.from(uniqueDevices.values());
                 document.getElementById('userCount').innerText = profileUsers.length;
                 document.getElementById('profileCount').innerText = profileUsers.length;
                 renderUserList();
+                await loadDeviceCount();
                 setStatus(`Profile data ${profileUsers.length} ယောက် ရှိပါသည်။`);
             } catch (error) {
                 console.error(error);
@@ -208,7 +230,7 @@
             const result = document.getElementById('result');
             result.hidden = false;
             result.innerHTML = `<div class="profile-head"><div class="avatar">${renderAvatar(profile)}</div><div><h2>${escapeHtml(profile.name || 'အမည်မရှိ')}</h2><p>CODE: ${escapeHtml(profile.code || code)}</p></div></div>
-                <div class="grid"><div class="item"><small>Email</small><strong>${escapeHtml(profile.email || 'မချိတ်ရသေးပါ')}</strong></div><div class="item"><small>တစ်ရက်လုပ်အားခ</small><strong>${escapeHtml(profile.wage || 0)}฿</strong></div><div class="item"><small>OT တစ်နာရီခ</small><strong>${escapeHtml(profile.ot || 0)}฿</strong></div><div class="item"><small>Avatar အမျိုးအစား</small><strong>${escapeHtml(profile.avatarMode || 'emoji')}</strong></div><div class="item"><small>ရွေးထားသော Avatar</small><strong>${escapeHtml(profile.avatar || profile.av || '👤')}</strong></div></div>
+                <div class="grid"><div class="item"><small>Email</small><strong>${escapeHtml(profile.email || 'မချိတ်ရသေးပါ')}</strong></div><div class="item"><small>Device ID</small><strong>${escapeHtml(profile.deviceId || 'မမှတ်ထားရသေးပါ')}</strong></div><div class="item"><small>တစ်ရက်လုပ်အားခ</small><strong>${escapeHtml(profile.wage || 0)}฿</strong></div><div class="item"><small>OT တစ်နာရီခ</small><strong>${escapeHtml(profile.ot || 0)}฿</strong></div><div class="item"><small>Avatar အမျိုးအစား</small><strong>${escapeHtml(profile.avatarMode || 'emoji')}</strong></div><div class="item"><small>ရွေးထားသော Avatar</small><strong>${escapeHtml(profile.avatar || profile.av || '👤')}</strong></div></div>
                 ${profile.avatarUrl ? `<div class="avatar-url"><strong>Avatar URL:</strong><br>${escapeHtml(profile.avatarUrl)}</div>` : ''}`;
         }
 

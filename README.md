@@ -11,8 +11,13 @@ DailyWage Firebase Realtime Database ထဲရှိ **Profile အချက်�
 - Avatar/Emoji
 - Wage နှင့် OT
 - Avatar URL
+- Device registry count နှင့် profile တစ်ခုချင်းစီ၏ device ID အတို
 
 Income/expense records များကို admin page တွင် မပြပါ။ Password၊ screen lock၊ password reset request နှင့် password reset email စနစ်များ မပါဝင်ပါ။
+
+## Device registry
+
+Main DailyWage app သည် screen, CPU cores, browser/device signals, timezone, language နှင့် canvas signal များကို hash ပြုလုပ်ပြီး Firestore `devices/{deviceId}` တွင် registry သိမ်းပါသည်။ Device ID တူပါက Admin list တွင် profile duplicate မဖြစ်အောင် တစ်ခုတည်းအဖြစ် စုစည်းပြပါသည်။ Browser/OS ပြောင်းလဲမှုများကြောင့် fingerprint သည် 100% အမြဲမတည်မြဲနိုင်သော best-effort deduplication ဖြစ်သည်။
 
 ## User page
 
@@ -20,7 +25,7 @@ User page ကို ပုံမှန်အတိုင်း တိုက်�
 
 ## Firebase ပြင်ဆင်ရန်
 
-Realtime Database Rules တွင် admin page အတွက် `users` path ကို ဖတ်ခွင့်ရှိရန် လိုအပ်ပါသည်။ Admin page ကို PIN gate ဖြင့် ဝင်ရောက်စစ်ဆေးနိုင်ပါသည်။
+Realtime Database Rules တွင် admin page အတွက် `users` path ကို ဖတ်ခွင့်ရှိရန် လိုအပ်ပါသည်။ Firestore Rules တွင် `devices` collection ကို app write နှင့် admin read လုပ်နိုင်ရန် သီးခြားသတ်မှတ်ရပါမည်။ Admin page ကို PIN gate ဖြင့် ဝင်ရောက်စစ်ဆေးနိုင်ပါသည်။
 
 ## Security မှတ်ချက်
 
