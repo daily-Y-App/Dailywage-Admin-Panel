@@ -57,6 +57,16 @@
         .user-info strong { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .user-info span { display:block; color:var(--muted); font-size:11px; margin-top:3px; }
         .user-type { color:#166534 !important; }
+        .user-row { cursor:pointer; }
+        .detail-section { margin-top:16px; padding-top:14px; border-top:1px solid #e2e8f0; }
+        .detail-section h3 { margin:0 0 9px; font-size:15px; }
+        .detail-list { display:grid; gap:7px; max-height:360px; overflow:auto; }
+        .detail-row { padding:9px 10px; border-radius:10px; background:#f8fafc; border:1px solid #e2e8f0; font-size:12px; line-height:1.45; }
+        .detail-row strong { color:var(--primary); }
+        .chat-row { white-space:pre-wrap; }
+        .chat-row.user { border-left:4px solid #6366f1; }
+        .chat-row.ai { border-left:4px solid #10b981; }
+        .detail-empty { color:var(--muted); font-size:12px; padding:9px 0; }
         .lock-note { margin-top:12px; color:var(--muted); font-size:11px; line-height:1.5; }
         @media (max-width:420px) { .search-row { flex-direction:column; } button { min-height:46px; } }
     </style>
@@ -93,7 +103,7 @@
                     <input id="profileCode" type="text" placeholder="Profile Code ဖြင့်ရှာရန်" autocomplete="off">
                     <button id="searchButton" type="button" onclick="inspectProfile()">ရှာမည်</button>
                 </div>
-                <div class="notice">Profile အချက်အလက်ထဲမှ အမည်၊ code၊ avatar နှင့် wage/OT ကိုသာ ပြသပါသည်။ Income/expense records အပြည့်အစုံကို မပြပါ။</div>
+                <div class="notice">Admin PIN ဖြင့်ဝင်ပြီး user တစ်ဦးချင်းစီ၏ Profile၊ daily wage records နှင့် AI chat history ကို ဖတ်ရှုနိုင်ပါသည်။ Password များကို မသိမ်းပါ။</div>
             </section>
             <section id="result" class="card" hidden></section>
             <section class="card">
@@ -184,7 +194,7 @@
             }
             list.innerHTML = profileUsers.map(({ code, data }) => {
                 const profile = data.profile || {};
-                return `<div class="user-row">
+                return `<div class="user-row" data-profile-code="${escapeHtml(code)}" onclick="inspectProfileByCode(this.dataset.profileCode)">
                     <div class="user-avatar">${renderAvatar(profile)}</div>
                     <div class="user-info">
                         <strong>${escapeHtml(profile.name || 'အမည်မရှိ')}</strong>
@@ -225,13 +235,48 @@
             }
         }
 
+        function renderDailyRecords(data) {
+            const records = Array.isArray(data.records) ? data.records : Object.values(data.records || {});
+            if (!records.length) return '<div class="detail-empty">Daily wage data မရှိသေးပါ။</div>';
+            return `<div class="detail-list">${records.slice().reverse().slice(0, 120).map(record => {
+                const isIncome = record.type === 'income';
+                const details = isIncome && record.details ? ` · အလုပ်ချိန် ${escapeHtml(record.details.h || 0)} hr · OT ${escapeHtml(record.details.o || 0)} hr` : '';
+                return `<div class="detail-row"><strong>${isIncome ? 'ဝင်ငွေ' : 'ထွက်ငွေ'}</strong> · ${escapeHtml(record.date || '')} ${escapeHtml(record.time || '')}<br>${escapeHtml(record.category || '')} — ${escapeHtml(Number(record.amt || 0).toFixed(0))}฿${details}</div>`;
+            }).join('')}</div>`;
+        }
+
+        function renderAiHistory(data) {
+            const history = Array.isArray(data.aiChatHistory) ? data.aiChatHistory : Object.values(data.aiChatHistory || {});
+            if (!history.length) return '<div class="detail-empty">AI chat history မရှိသေးပါ။ User app မှာ chat အသစ်ပြောပြီးနောက် ဒီနေရာမှာ ပေါ်ပါမယ်။</div>';
+            return `<div class="detail-list">${history.slice(-80).map(item => {
+                const role = item.role === 'user' ? 'user' : 'ai';
+                const label = role === 'user' ? 'User' : 'AI';
+                const time = item.time ? new Date(Number(item.time)).toLocaleString() : '';
+                return `<div class="detail-row chat-row ${role}"><strong>${label}</strong>${time ? ` · ${escapeHtml(time)}` : ''}<br>${escapeHtml(item.text || '')}</div>`;
+            }).join('')}</div>`;
+        }
+
         function renderResult(code, data) {
             const profile = data.profile || {};
             const result = document.getElementById('result');
             result.hidden = false;
             result.innerHTML = `<div class="profile-head"><div class="avatar">${renderAvatar(profile)}</div><div><h2>${escapeHtml(profile.name || 'အမည်မရှိ')}</h2><p>CODE: ${escapeHtml(profile.code || code)}</p></div></div>
                 <div class="grid"><div class="item"><small>Email</small><strong>${escapeHtml(profile.email || 'မချိတ်ရသေးပါ')}</strong></div><div class="item"><small>Device ID</small><strong>${escapeHtml(profile.deviceId || 'မမှတ်ထားရသေးပါ')}</strong></div><div class="item"><small>တစ်ရက်လုပ်အားခ</small><strong>${escapeHtml(profile.wage || 0)}฿</strong></div><div class="item"><small>OT တစ်နာရီခ</small><strong>${escapeHtml(profile.ot || 0)}฿</strong></div><div class="item"><small>Avatar အမျိုးအစား</small><strong>${escapeHtml(profile.avatarMode || 'emoji')}</strong></div><div class="item"><small>ရွေးထားသော Avatar</small><strong>${escapeHtml(profile.avatar || profile.av || '👤')}</strong></div></div>
-                ${profile.avatarUrl ? `<div class="avatar-url"><strong>Avatar URL:</strong><br>${escapeHtml(profile.avatarUrl)}</div>` : ''}`;
+                ${profile.avatarUrl ? `<div class="avatar-url"><strong>Avatar URL:</strong><br>${escapeHtml(profile.avatarUrl)}</div>` : ''}
+                <div class="detail-section"><h3>📊 Daily wage data (${Array.isArray(data.records) ? data.records.length : Object.keys(data.records || {}).length})</h3>${renderDailyRecords(data)}</div>
+                <div class="detail-section"><h3>💬 AI chat history</h3>${renderAiHistory(data)}</div>`;
+            result.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function inspectProfileByCode(code) {
+            const entry = profileUsers.find(item => item.code === code);
+            if (entry) {
+                renderResult(entry.code, entry.data);
+                setStatus(`${entry.data.profile?.name || entry.code} ၏ data ကို ပြထားပါသည်။`);
+                return;
+            }
+            document.getElementById('profileCode').value = code;
+            inspectProfile();
         }
 
         async function inspectProfile() {

@@ -12,8 +12,10 @@ DailyWage Firebase Realtime Database ထဲရှိ **Profile အချက်�
 - Wage နှင့် OT
 - Avatar URL
 - Device registry count နှင့် profile တစ်ခုချင်းစီ၏ device ID အတို
+- User တစ်ဦးချင်းစီ၏ daily wage income/expense records
+- User app မှ Firebase သို့ sync လုပ်ထားသော AI chat history
 
-Income/expense records များကို admin page တွင် မပြပါ။ Password၊ screen lock၊ password reset request နှင့် password reset email စနစ်များ မပါဝင်ပါ။
+Password၊ screen lock၊ password reset request နှင့် password reset email စနစ်များ မပါဝင်ပါ။
 
 ## Device registry
 
@@ -25,7 +27,7 @@ User page ကို ပုံမှန်အတိုင်း တိုက်�
 
 ## Firebase ပြင်ဆင်ရန်
 
-Realtime Database Rules တွင် admin page အတွက် `users` path ကို ဖတ်ခွင့်ရှိရန် လိုအပ်ပါသည်။ Firestore Rules တွင် `devices` collection ကို app write နှင့် admin read လုပ်နိုင်ရန် သီးခြားသတ်မှတ်ရပါမည်။ Admin page ကို PIN gate ဖြင့် ဝင်ရောက်စစ်ဆေးနိုင်ပါသည်။
+Realtime Database Rules တွင် admin page အတွက် `users` path ကို ဖတ်ခွင့်ရှိရန် လိုအပ်ပါသည်။ `users/{profileCode}` ထဲတွင် `records` နှင့် `aiChatHistory` ပါဝင်ပါသည်။ Firestore Rules တွင် `devices` collection ကို app write နှင့် admin read လုပ်နိုင်ရန် သီးခြားသတ်မှတ်ရပါမည်။ Admin page ကို PIN gate ဖြင့် ဝင်ရောက်စစ်ဆေးနိုင်ပါသည်။
 
 ## Security မှတ်ချက်
 
