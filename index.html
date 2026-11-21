@@ -154,6 +154,7 @@
             <section class="card">
                 <div class="admin-toolbar"><h2>💸 Reward Withdrawals</h2><button class="refresh-button" type="button" onclick="loadReferralWithdrawals()">↻ Refresh</button></div>
                 <div class="notice">Withdrawal ကို စစ်ဆေးပြီး ဖုန်းဘေလ်ထည့်ပြီးနောက် `Deduct Balance & Mark Paid` ကိုနှိပ်ပါ။ ထိုအချိန်တွင် User ၏ ဆုငွေလက်ကျန်မှ ပမာဏကို transaction ဖြင့် နုတ်ပါမည်။</div>
+                <div id="withdrawalPendingNotice" class="notice" style="background:#fef3c7;border-color:#fcd34d;color:#92400e;font-weight:800;">🔔 Pending withdrawal notification စစ်ဆေးနေပါသည်...</div>
                 <div id="withdrawalList" class="claim-list"><div class="empty">Withdrawal data ရယူနေပါသည်...</div></div>
             </section>
         </section>
@@ -463,6 +464,9 @@
             try {
                 const snapshot = await firestore.collection('referralWithdrawals').get();
                 referralWithdrawals = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+                const pendingCount = referralWithdrawals.filter(item => String(item.status || '').toLowerCase() === 'pending').length;
+                const notice = document.getElementById('withdrawalPendingNotice');
+                if (notice) notice.innerText = pendingCount ? `🔔 ငွေထုတ်ရန် တောင်းခံမှု ${pendingCount} ခု စိစစ်ရန်ရှိပါသည်။` : '✅ Pending ငွေထုတ်တောင်းခံမှု မရှိသေးပါ။';
                 renderReferralWithdrawals();
             } catch (error) { console.warn('Referral withdrawal read failed:', error); list.innerHTML = '<div class="detail-empty">Withdrawal data ဖတ်မရပါ။ Firestore Rules ကို စစ်ပါ။</div>'; }
         }
