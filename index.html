@@ -147,6 +147,11 @@
                 <div id="claimList" class="claim-list"><div class="empty">Referral claim data ရယူနေပါသည်...</div></div>
             </section>
             <section class="card">
+                <div class="admin-toolbar"><h2>🔗 Referral Activity</h2><button class="refresh-button" type="button" onclick="loadReferralAttributions()">↻ Refresh</button></div>
+                <div class="notice">Referral Link ကနေ App ဖွင့်ပြီး Profile/စာရင်းအသုံးပြုသူများကို Claim မတင်သေးခင်ကတည်းက ဒီနေရာမှာ စစ်ဆေးနိုင်ပါသည်။</div>
+                <div id="attributionList" class="claim-list"><div class="empty">Referral activity ရယူနေပါသည်...</div></div>
+            </section>
+            <section class="card">
                 <div class="admin-toolbar"><h2>💸 Reward Withdrawals</h2><button class="refresh-button" type="button" onclick="loadReferralWithdrawals()">↻ Refresh</button></div>
                 <div class="notice">Withdrawal ကို စစ်ဆေးပြီး ဖုန်းဘေလ်ထည့်ပြီးနောက် `Deduct Balance & Mark Paid` ကိုနှိပ်ပါ။ ထိုအချိန်တွင် User ၏ ဆုငွေလက်ကျန်မှ ပမာဏကို transaction ဖြင့် နုတ်ပါမည်။</div>
                 <div id="withdrawalList" class="claim-list"><div class="empty">Withdrawal data ရယူနေပါသည်...</div></div>
@@ -172,6 +177,7 @@
         let profileUsers = [];
         let referralClaims = [];
         let referralWithdrawals = [];
+        let referralAttributions = [];
 
         async function loadDeviceCount() {
             try {
@@ -311,6 +317,7 @@
                 await loadDeviceCount();
                 await loadDeviceDirectory();
                 await loadReferralClaims();
+                await loadReferralAttributions();
                 await loadReferralWithdrawals();
                 setStatus(`Profile data ${profileUsers.length} ယောက် ရှိပါသည်။`);
             } catch (error) {
@@ -398,6 +405,21 @@
             }
         }
 
+        async function loadReferralAttributions() {
+            const list = document.getElementById('attributionList');
+            try {
+                const [attributionSnapshot, activitySnapshot] = await Promise.all([firestore.collection('referralAttributions').get(), firestore.collection('referralUsers').get()]);
+                const activityMap = new Map(activitySnapshot.docs.map(doc => [doc.id, doc.data()]));
+                referralAttributions = attributionSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), activity: activityMap.get(doc.id) || {} })).sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+                if (!referralAttributions.length) { list.innerHTML = '<div class="empty">Referral activity မရှိသေးပါ။</div>'; return; }
+                list.innerHTML = referralAttributions.map(item => {
+                    const activity = item.activity || {};
+                    const active = Number(activity.incomeCount || 0) > 0 || Number(activity.appOpenCount || 0) > 0;
+                    return `<div class="claim-row"><div class="claim-head"><strong>${escapeHtml(item.referrerCode || 'Referrer မသိ')} → ${escapeHtml(item.referredCode || 'Referred မသိ')}</strong><span class="badge ${active ? 'paid' : 'pending'}">${active ? 'Active ဖြစ်နိုင်' : 'စစ်ဆေးရန်'}</span></div><div class="claim-meta">Device: ${escapeHtml(item.referredDeviceId || 'မသိရသေးပါ')}<br>Records: ${escapeHtml(activity.recordCount || 0)} · Income: ${escapeHtml(activity.incomeCount || 0)} · Expense: ${escapeHtml(activity.expenseCount || 0)} · OT: ${escapeHtml(activity.otHours || 0)} hr<br>App ဖွင့်မှု: ${escapeHtml(activity.appOpenCount || 0)} · နောက်ဆုံးအသုံးပြုချိန်: ${escapeHtml(activity.lastActiveAt || 'မသိရသေးပါ')}<br>Referral မှတ်တမ်းတင်ချိန်: ${escapeHtml(item.createdAt || '')}</div></div>`;
+                }).join('');
+            } catch (error) { console.warn('Referral attribution read failed:', error); list.innerHTML = '<div class="detail-empty">Referral activity ဖတ်မရပါ။ Firestore Rules ကို စစ်ပါ။</div>'; }
+        }
+
         async function updateReferralClaim(claimId, nextStatus) {
             const claim = referralClaims.find(item => item.id === claimId);
             if (!claim) return setStatus('Claim မတွေ့ပါ။', true);
@@ -432,7 +454,7 @@
             if (!referralWithdrawals.length) { list.innerHTML = '<div class="empty">Withdrawal request မရှိသေးပါ။</div>'; return; }
             list.innerHTML = referralWithdrawals.map(item => {
                 const canReview = String(item.status).toLowerCase() === 'pending';
-                return `<div class="claim-row"><div class="claim-head"><strong>${escapeHtml(item.referrerName || item.referrerCode || 'User မသိ')}</strong><span class="badge ${claimStatusClass(item.status)}">${escapeHtml(item.status || 'Pending')}</span></div><div class="claim-meta">Profile: ${escapeHtml(item.referrerCode || '')}<br>Phone: <strong>${escapeHtml(item.phoneNumber || '')}</strong> · ထုတ်ယူငွေ: <strong>${escapeHtml(item.amount || 0)}฿</strong><br>တောင်းခံချိန်: ${escapeHtml(item.createdAt || '')}${item.reviewedAt ? `<br>စိစစ်ချိန်: ${escapeHtml(item.reviewedAt)}` : ''}</div>${canReview ? `<div class="claim-actions"><button type="button" class="approve" data-withdrawal-id="${escapeHtml(item.id)}" onclick="processReferralWithdrawal(this.dataset.withdrawalId)">Deduct Balance & Mark Paid</button><button type="button" class="reject" data-withdrawal-id="${escapeHtml(item.id)}" onclick="rejectReferralWithdrawal(this.dataset.withdrawalId)">Reject</button></div>` : ''}</div>`;
+                return `<div class="claim-row"><div class="claim-head"><strong>${escapeHtml(item.referrerName || item.referrerCode || 'User မသိ')}</strong><span class="badge ${claimStatusClass(item.status)}">${escapeHtml(item.status || 'Pending')}</span></div><div class="claim-meta">Profile: ${escapeHtml(item.referrerCode || '')}<br>Phone: <strong>${escapeHtml(item.phoneNumber || '')}</strong><br>Email: <strong>${escapeHtml(item.email || 'မထည့်ထားပါ')}</strong> · ထုတ်ယူငွေ: <strong>${escapeHtml(item.amount || 0)}฿</strong><br>တောင်းခံချိန်: ${escapeHtml(item.createdAt || '')}${item.reviewedAt ? `<br>စိစစ်ချိန်: ${escapeHtml(item.reviewedAt)}` : ''}</div>${canReview ? `<div class="claim-actions"><button type="button" class="approve" data-withdrawal-id="${escapeHtml(item.id)}" onclick="processReferralWithdrawal(this.dataset.withdrawalId)">Deduct Balance & Mark Paid</button><button type="button" class="reject" data-withdrawal-id="${escapeHtml(item.id)}" onclick="rejectReferralWithdrawal(this.dataset.withdrawalId)">Reject</button></div>` : ''}</div>`;
             }).join('');
         }
 
