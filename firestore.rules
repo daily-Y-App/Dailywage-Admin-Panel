@@ -76,6 +76,15 @@ service cloud.firestore {
       allow update, delete: if admin();
     }
 
+    match /adminNotifications/{notificationId} {
+      allow read: if admin();
+      allow create: if signedIn()
+        && request.resource.data.type == 'withdrawal_request'
+        && request.resource.data.referrerCode == request.auth.uid
+        && request.resource.data.status == 'Unread';
+      allow update, delete: if admin();
+    }
+
     // Existing device registry: keep app registration possible, but reserve
     // delete/write review for an authenticated admin in production.
     match /devices/{deviceId} {

@@ -488,6 +488,7 @@
                     if (available < amount) throw new Error('INSUFFICIENT_BALANCE');
                     const now = new Date().toISOString();
                     transaction.update(withdrawalRef, { status: 'Paid', reviewedAt: now, reviewedBy: 'admin-panel' });
+                    transaction.set(firestore.collection('adminNotifications').doc(withdrawalId), { status: 'Resolved', resolution: 'Paid', reviewedAt: now, reviewedBy: 'admin-panel' }, { merge: true });
                     transaction.set(balanceRef, { availableBalance: firebase.firestore.FieldValue.increment(-amount), paidOutTotal: firebase.firestore.FieldValue.increment(amount), updatedAt: now }, { merge: true });
                     transaction.set(firestore.collection('referralPayouts').doc(`withdrawal_${withdrawalId}`), { withdrawalId, referrerCode: withdrawal.referrerCode, phoneNumber: withdrawal.phoneNumber, amount, status: 'Paid', paidAt: now });
                 });
@@ -498,7 +499,7 @@
 
         async function rejectReferralWithdrawal(withdrawalId) {
             if (!window.confirm('ဒီ withdrawal request ကို Reject လုပ်မည်။ ဆက်လုပ်မလား?')) return;
-            try { await firestore.collection('referralWithdrawals').doc(withdrawalId).update({ status: 'Rejected', reviewedAt: new Date().toISOString(), reviewedBy: 'admin-panel' }); await loadReferralWithdrawals(); setStatus('Withdrawal ကို Reject လုပ်ပြီးပါပြီ။'); }
+            try { const now = new Date().toISOString(); await firestore.collection('referralWithdrawals').doc(withdrawalId).update({ status: 'Rejected', reviewedAt: now, reviewedBy: 'admin-panel' }); await firestore.collection('adminNotifications').doc(withdrawalId).set({ status: 'Resolved', resolution: 'Rejected', reviewedAt: now, reviewedBy: 'admin-panel' }, { merge: true }); await loadReferralWithdrawals(); setStatus('Withdrawal ကို Reject လုပ်ပြီးပါပြီ။'); }
             catch (error) { setStatus('Withdrawal reject မလုပ်နိုင်ပါ။ Firestore Rules ကို စစ်ပါ။', true); }
         }
 
