@@ -1,6 +1,6 @@
 # DailyWage Admin Panel
 
-DailyWage Firebase Realtime Database ထဲရှိ **Profile အချက်အလက်များကိုသာ** စစ်ဆေးရန် အသုံးပြုသော admin page ဖြစ်သည်။
+DailyWage Firebase Realtime Database ထဲရှိ Profile, records, AI chat နှင့် device data ကို စစ်ဆေး/စီမံရန် အသုံးပြုသော admin page ဖြစ်သည်။
 
 ## Admin page မှာပြသမည့် data
 
@@ -14,6 +14,7 @@ DailyWage Firebase Realtime Database ထဲရှိ **Profile အချက်�
 - Device registry count နှင့် profile တစ်ခုချင်းစီ၏ device ID အတို
 - User တစ်ဦးချင်းစီ၏ daily wage income/expense records
 - User app မှ Firebase သို့ sync လုပ်ထားသော AI chat history
+- User row/detail ထဲမှ confirm ပြီး Profile, records, AI chat နှင့် device registry ကို ဖျက်ခြင်း
 
 Password၊ screen lock၊ password reset request နှင့် password reset email စနစ်များ မပါဝင်ပါ။
 
@@ -27,8 +28,8 @@ User page ကို ပုံမှန်အတိုင်း တိုက်�
 
 ## Firebase ပြင်ဆင်ရန်
 
-Realtime Database Rules တွင် admin page အတွက် `users` path ကို ဖတ်ခွင့်ရှိရန် လိုအပ်ပါသည်။ `users/{profileCode}` ထဲတွင် `records` နှင့် `aiChatHistory` ပါဝင်ပါသည်။ Firestore Rules တွင် `devices` collection ကို app write နှင့် admin read လုပ်နိုင်ရန် သီးခြားသတ်မှတ်ရပါမည်။ Admin page ကို PIN gate ဖြင့် ဝင်ရောက်စစ်ဆေးနိုင်ပါသည်။
+Realtime Database Rules တွင် admin page အတွက် `users` path ကို read နှင့် selected user အတွက် delete ခွင့်ရှိရန် လိုအပ်ပါသည်။ `users/{profileCode}` ထဲတွင် `records` နှင့် `aiChatHistory` ပါဝင်ပါသည်။ Firestore Rules တွင် `devices` collection ကို app write/admin read နှင့် delete ခွင့်ရှိရန် သီးခြားသတ်မှတ်ရပါမည်။ ဖျက်ခလုတ်သည် browser `confirm` ပြီးမှသာ request ပို့ပါသည်။
 
 ## Security မှတ်ချက်
 
-Admin page ၏ PIN gate သည် client-side static page ဖြစ်သောကြောင့် အပြည့်အဝ admin security မဟုတ်ပါ။ အမှန်တကယ် admin-only access လိုပါက Firebase Authentication custom claims နှင့် admin-only Realtime Database Rules ထည့်ရန်လိုအပ်သည်။
+Admin page ၏ PIN gate သည် client-side static page ဖြစ်သောကြောင့် အပြည့်အဝ admin security မဟုတ်ပါ။ Delete/write rules ကို public client အား မဖွင့်သင့်ပါ။ အမှန်တကယ် admin-only access လိုပါက Firebase Authentication custom claims သို့မဟုတ် server-side admin endpoint နှင့် admin-only Realtime Database/Firestore Rules ထည့်ရန်လိုအပ်သည်။

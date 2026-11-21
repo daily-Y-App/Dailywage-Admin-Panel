@@ -58,6 +58,9 @@
         .user-info span { display:block; color:var(--muted); font-size:11px; margin-top:3px; }
         .user-type { color:#166534 !important; }
         .user-row { cursor:pointer; }
+        .user-delete-button { flex:0 0 auto; min-height:34px; padding:0 9px; border-radius:9px; background:#fee2e2; color:#b91c1c; font-size:11px; border:1px solid #fecaca; }
+        .user-delete-button:hover { background:#fecaca; }
+        .danger-action { margin-top:16px; min-height:40px; padding:0 13px; background:#b91c1c; font-size:12px; }
         .detail-section { margin-top:16px; padding-top:14px; border-top:1px solid #e2e8f0; }
         .detail-section h3 { margin:0 0 9px; font-size:15px; }
         .detail-list { display:grid; gap:7px; max-height:360px; overflow:auto; }
@@ -67,6 +70,11 @@
         .chat-row.user { border-left:4px solid #6366f1; }
         .chat-row.ai { border-left:4px solid #10b981; }
         .detail-empty { color:var(--muted); font-size:12px; padding:9px 0; }
+        .device-list { display:grid; gap:8px; margin-top:12px; }
+        .device-row { display:flex; align-items:center; gap:10px; padding:10px; border:1px solid #e2e8f0; border-radius:12px; background:#fff; }
+        .device-info { min-width:0; flex:1; }
+        .device-info strong, .device-info span { display:block; overflow-wrap:anywhere; }
+        .device-info span { color:var(--muted); font-size:11px; margin-top:3px; }
         .lock-note { margin-top:12px; color:var(--muted); font-size:11px; line-height:1.5; }
         @media (max-width:420px) { .search-row { flex-direction:column; } button { min-height:46px; } }
     </style>
@@ -75,7 +83,7 @@
     <main class="shell">
         <section class="hero">
             <h1>🔎 DailyWage Admin</h1>
-            <p>Firebase ထဲရှိ Profile နှင့် Avatar data ကို read-only စစ်ဆေးရန်</p>
+            <p>Firebase ထဲရှိ Profile, records, AI chat နှင့် device data ကို စစ်ဆေး/စီမံရန်</p>
         </section>
 
         <section id="pinGate" class="card pin-card">
@@ -110,6 +118,11 @@
                 <h2 style="margin:0;font-size:19px;">အသုံးပြုနေသူများ</h2>
                 <div id="userList" class="user-list"><div class="empty">Data ရယူနေပါသည်...</div></div>
             </section>
+            <section class="card">
+                <h2 style="margin:0;font-size:19px;">📱 Device Registry</h2>
+                <div class="notice">အသုံးမပြုတော့သော device registry ကိုသာ ဖျက်ပါ။ User profile/records ကို မဖျက်လိုပါက User delete ခလုတ်မသုံးဘဲ ဒီနေရာက device delete ကိုသာ သုံးပါ။</div>
+                <div id="deviceList" class="device-list"><div class="empty">Device data ရယူနေပါသည်...</div></div>
+            </section>
         </section>
     </main>
 
@@ -137,6 +150,44 @@
             } catch (error) {
                 console.warn('Device registry read failed:', error);
                 document.getElementById('deviceCount').innerText = profileUsers.filter(item => item.data.profile.deviceId).length;
+            }
+        }
+
+        async function loadDeviceDirectory() {
+            const list = document.getElementById('deviceList');
+            try {
+                const snapshot = await firestore.collection('devices').get();
+                const devices = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => String(b.lastSeen || '').localeCompare(String(a.lastSeen || '')));
+                if (!devices.length) {
+                    list.innerHTML = '<div class="empty">Device registry မရှိသေးပါ။</div>';
+                    return;
+                }
+                list.innerHTML = devices.map(device => `<div class="device-row">
+                    <div class="device-info">
+                        <strong>${escapeHtml(device.name || 'အမည်မရှိ')} · ${escapeHtml(device.profileCode || 'Profile မချိတ်ရသေးပါ')}</strong>
+                        <span>Device ID: ${escapeHtml(device.deviceId || device.id)}</span>
+                        <span>Last seen: ${escapeHtml(device.lastSeen || 'မသိရသေးပါ')}</span>
+                    </div>
+                    <button type="button" class="user-delete-button" data-device-id="${escapeHtml(device.id)}" data-profile-code="${escapeHtml(device.profileCode || '')}" onclick="deleteDeviceRecord(this.dataset.deviceId, this.dataset.profileCode)">ဖျက်</button>
+                </div>`).join('');
+            } catch (error) {
+                console.warn('Device directory read failed:', error);
+                list.innerHTML = '<div class="detail-empty">Device list ဖတ်မရပါ။ Firestore read rules ကို စစ်ပါ။</div>';
+            }
+        }
+
+        async function deleteDeviceRecord(deviceId, profileCode) {
+            const confirmed = window.confirm(`Device ${deviceId} ကို registry မှ ဖျက်မည်။ User profile/records ကို မဖျက်ပါ။ ဆက်လုပ်မလား?`);
+            if (!confirmed) return;
+            setStatus(`Device ${deviceId} ဖျက်နေပါသည်...`);
+            try {
+                await firestore.collection('devices').doc(deviceId).delete();
+                await loadDeviceCount();
+                await loadDeviceDirectory();
+                setStatus(`Device registry ကို ဖျက်ပြီးပါပြီ။${profileCode ? ` Profile ${profileCode} data မဖျက်ပါ။` : ''}`);
+            } catch (error) {
+                console.error(error);
+                setStatus('Device ဖျက်မရပါ။ Firestore Rules တွင် delete ခွင့် စစ်ပေးပါ။', true);
             }
         }
 
@@ -203,6 +254,7 @@
                         <span>Device: ${escapeHtml(profile.deviceId ? profile.deviceId.slice(0, 18) + '…' : 'မမှတ်ထားရသေးပါ')}</span>
                         <span class="user-type">Avatar: ${escapeHtml(profile.avatar || profile.av || '👤')} · ${escapeHtml(profile.avatarMode || 'emoji')}</span>
                     </div>
+                    <button type="button" class="user-delete-button" data-profile-code="${escapeHtml(code)}" onclick="event.stopPropagation(); deleteUserRecord(this.dataset.profileCode)">ဖျက်</button>
                 </div>`;
             }).join('');
         }
@@ -227,6 +279,7 @@
                 document.getElementById('profileCount').innerText = profileUsers.length;
                 renderUserList();
                 await loadDeviceCount();
+                await loadDeviceDirectory();
                 setStatus(`Profile data ${profileUsers.length} ယောက် ရှိပါသည်။`);
             } catch (error) {
                 console.error(error);
@@ -264,8 +317,33 @@
                 <div class="grid"><div class="item"><small>Email</small><strong>${escapeHtml(profile.email || 'မချိတ်ရသေးပါ')}</strong></div><div class="item"><small>Device ID</small><strong>${escapeHtml(profile.deviceId || 'မမှတ်ထားရသေးပါ')}</strong></div><div class="item"><small>တစ်ရက်လုပ်အားခ</small><strong>${escapeHtml(profile.wage || 0)}฿</strong></div><div class="item"><small>OT တစ်နာရီခ</small><strong>${escapeHtml(profile.ot || 0)}฿</strong></div><div class="item"><small>Avatar အမျိုးအစား</small><strong>${escapeHtml(profile.avatarMode || 'emoji')}</strong></div><div class="item"><small>ရွေးထားသော Avatar</small><strong>${escapeHtml(profile.avatar || profile.av || '👤')}</strong></div></div>
                 ${profile.avatarUrl ? `<div class="avatar-url"><strong>Avatar URL:</strong><br>${escapeHtml(profile.avatarUrl)}</div>` : ''}
                 <div class="detail-section"><h3>📊 Daily wage data (${Array.isArray(data.records) ? data.records.length : Object.keys(data.records || {}).length})</h3>${renderDailyRecords(data)}</div>
-                <div class="detail-section"><h3>💬 AI chat history</h3>${renderAiHistory(data)}</div>`;
+                <div class="detail-section"><h3>💬 AI chat history</h3>${renderAiHistory(data)}</div>
+                <button type="button" class="danger-action" data-profile-code="${escapeHtml(code)}" onclick="deleteUserRecord(this.dataset.profileCode)">🗑️ ဒီ User/Device data ကို ဖျက်မည်</button>`;
             result.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        async function deleteUserRecord(code) {
+            const entry = profileUsers.find(item => item.code === code);
+            const profile = entry?.data?.profile || {};
+            if (!entry) return setStatus('ဖျက်မည့် user data မတွေ့ပါ။', true);
+            const name = profile.name || 'အမည်မရှိ';
+            const deviceId = profile.deviceId || '';
+            const confirmed = window.confirm(`${name} (${code}) ၏ Profile, records, AI chat history${deviceId ? ' နှင့် device registry' : ''} ကို အပြီးဖျက်မည်။ ဆက်လုပ်မလား?`);
+            if (!confirmed) return;
+            setStatus(`${name} ၏ data ဖျက်နေပါသည်...`);
+            try {
+                await db.ref('users/' + code).remove();
+                if (deviceId) {
+                    try { await firestore.collection('devices').doc(deviceId).delete(); }
+                    catch (deviceError) { console.warn('Device registry delete failed:', deviceError); }
+                }
+                document.getElementById('result').hidden = true;
+                await loadUsers();
+                setStatus(`${name} ၏ Profile/records/chat data ကို ဖျက်ပြီးပါပြီ။`);
+            } catch (error) {
+                console.error(error);
+                setStatus('ဖျက်မရပါ။ Firebase Rules တွင် users path အတွက် delete/write ခွင့် စစ်ပေးပါ။', true);
+            }
         }
 
         function inspectProfileByCode(code) {
