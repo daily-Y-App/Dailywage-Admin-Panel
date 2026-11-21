@@ -76,6 +76,23 @@
         .device-info strong, .device-info span { display:block; overflow-wrap:anywhere; }
         .device-info span { color:var(--muted); font-size:11px; margin-top:3px; }
         .lock-note { margin-top:12px; color:var(--muted); font-size:11px; line-height:1.5; }
+        .referral-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; margin-top:14px; }
+        .referral-summary .stat strong { font-size:20px; }
+        .claim-list { display:grid; gap:10px; margin-top:14px; }
+        .claim-row { padding:13px; border:1px solid #e2e8f0; border-radius:14px; background:#fff; }
+        .claim-row.fraud { border-color:#fecaca; background:#fff7f7; }
+        .claim-head { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; }
+        .claim-head strong { color:var(--primary); }
+        .claim-meta { color:var(--muted); font-size:11px; line-height:1.6; margin-top:7px; overflow-wrap:anywhere; }
+        .claim-actions { display:flex; gap:7px; margin-top:10px; }
+        .claim-actions button { min-height:34px; padding:0 10px; font-size:11px; }
+        .approve { background:#047857; }
+        .reject { background:#b91c1c; }
+        .badge { display:inline-block; padding:4px 7px; border-radius:999px; font-size:10px; font-weight:800; background:#e2e8f0; color:#334155; }
+        .badge.pending { background:#fef3c7; color:#92400e; }
+        .badge.paid { background:#dcfce7; color:#166534; }
+        .badge.rejected { background:#fee2e2; color:#991b1b; }
+        @media (max-width:420px) { .referral-summary { grid-template-columns:repeat(2,minmax(0,1fr)); } }
         @media (max-width:420px) { .search-row { flex-direction:column; } button { min-height:46px; } }
     </style>
 </head>
@@ -123,6 +140,12 @@
                 <div class="notice">အသုံးမပြုတော့သော device registry ကိုသာ ဖျက်ပါ။ User profile/records ကို မဖျက်လိုပါက User delete ခလုတ်မသုံးဘဲ ဒီနေရာက device delete ကိုသာ သုံးပါ။</div>
                 <div id="deviceList" class="device-list"><div class="empty">Device data ရယူနေပါသည်...</div></div>
             </section>
+            <section class="card">
+                <div class="admin-toolbar"><h2>🎁 Referral Claims</h2><button class="refresh-button" type="button" onclick="loadReferralClaims()">↻ Refresh</button></div>
+                <div class="notice">Reward သတ်မှတ်ချက်: Claim တစ်ကြိမ်လျှင် ၂၀฿၊ Referrer တစ်ဦးအတွက် campaign အများဆုံး ၁၀၀฿။ Device/Phone တူညီမှုနှင့် Activity summary ကို စစ်ပြီးမှသာ Paid လုပ်ပါ။</div>
+                <div class="referral-summary"><div class="stat"><small>Pending</small><strong id="pendingClaimCount">0</strong></div><div class="stat"><small>Paid</small><strong id="paidClaimCount">0</strong></div><div class="stat"><small>Fraud flags</small><strong id="fraudClaimCount">0</strong></div></div>
+                <div id="claimList" class="claim-list"><div class="empty">Referral claim data ရယူနေပါသည်...</div></div>
+            </section>
         </section>
     </main>
 
@@ -142,6 +165,7 @@
 
         const ADMIN_PIN_HASH = '08f8881ee389cd2dbc13b3adb69030273cc675e1d5dac1d58004e70444fb11e4';
         let profileUsers = [];
+        let referralClaims = [];
 
         async function loadDeviceCount() {
             try {
@@ -280,6 +304,7 @@
                 renderUserList();
                 await loadDeviceCount();
                 await loadDeviceDirectory();
+                await loadReferralClaims();
                 setStatus(`Profile data ${profileUsers.length} ယောက် ရှိပါသည်။`);
             } catch (error) {
                 console.error(error);
@@ -308,6 +333,89 @@
                 return `<div class="detail-row chat-row ${role}"><strong>${label}</strong>${time ? ` · ${escapeHtml(time)}` : ''}<br>${escapeHtml(item.text || '')}</div>`;
             }).join('')}</div>`;
         }
+
+        function claimStatusClass(status) {
+            const value = String(status || '').toLowerCase();
+            return value === 'paid' ? 'paid' : value === 'rejected' ? 'rejected' : 'pending';
+        }
+
+        function calculateClaimFlags(claim, allClaims) {
+            const flags = [];
+            const device = String(claim.referredDeviceId || '');
+            const phone = String(claim.phoneNumber || '');
+            if (claim.referrerCode && claim.referrerCode === claim.referredCode) flags.push('Self-referral');
+            if (device && allClaims.some(other => other.id !== claim.id && String(other.referredDeviceId || '') === device)) flags.push('Device duplicate');
+            if (phone && allClaims.some(other => other.id !== claim.id && String(other.phoneNumber || '') === phone)) flags.push('Phone duplicate');
+            const referred = profileUsers.find(item => item.code === claim.referredCode)?.data?.profile || {};
+            const referrer = profileUsers.find(item => item.code === claim.referrerCode)?.data?.profile || {};
+            if (device && referrer.deviceId && device === referrer.deviceId) flags.push('Referrer device same');
+            const activity = claim.activity || {};
+            if (Number(activity.recordCount || 0) < 1 || Number(activity.incomeCount || 0) < 1) flags.push('No wage record');
+            if (Number(activity.appOpenCount || 0) < 1) flags.push('Low app activity');
+            if (referred.phone && String(referred.phone).replace(/\D/g, '') === phone) flags.push('Self phone match');
+            return flags;
+        }
+
+        function renderReferralClaims() {
+            const list = document.getElementById('claimList');
+            const pending = referralClaims.filter(claim => String(claim.status).toLowerCase() === 'pending').length;
+            const paid = referralClaims.filter(claim => String(claim.status).toLowerCase() === 'paid').length;
+            const annotated = referralClaims.map(claim => ({ ...claim, fraudFlags: calculateClaimFlags(claim, referralClaims) }));
+            document.getElementById('pendingClaimCount').innerText = pending;
+            document.getElementById('paidClaimCount').innerText = paid;
+            document.getElementById('fraudClaimCount').innerText = annotated.filter(claim => claim.fraudFlags.length).length;
+            if (!annotated.length) { list.innerHTML = '<div class="empty">Referral claim မရှိသေးပါ။</div>'; return; }
+            list.innerHTML = annotated.map(claim => {
+                const activity = claim.activity || {};
+                const flags = claim.fraudFlags;
+                const status = claimStatusClass(claim.status);
+                const canReview = String(claim.status).toLowerCase() === 'pending';
+                const date = claim.createdAt ? new Date(claim.createdAt).toLocaleString() : '';
+                return `<div class="claim-row ${flags.length ? 'fraud' : ''}">
+                    <div class="claim-head"><strong>${escapeHtml(claim.referrerName || claim.referrerCode || 'Referrer မသိ')} → ${escapeHtml(claim.referredName || claim.referredCode || 'User မသိ')}</strong><span class="badge ${status}">${escapeHtml(claim.status || 'Pending')}</span></div>
+                    <div class="claim-meta">Referrer: ${escapeHtml(claim.referrerCode || '')} · Referred: ${escapeHtml(claim.referredCode || '')}<br>Phone: <strong>${escapeHtml(claim.phoneNumber || '')}</strong> · Reward: <strong>${escapeHtml(claim.rewardAmount || 0)}฿</strong><br>Device: ${escapeHtml(claim.referredDeviceId || 'မသိရသေးပါ')}<br>Activity: records ${escapeHtml(activity.recordCount || 0)} · income ${escapeHtml(activity.incomeCount || 0)} · expense ${escapeHtml(activity.expenseCount || 0)} · OT ${escapeHtml(activity.otHours || 0)} hr · app open ${escapeHtml(activity.appOpenCount || 0)} · last ${escapeHtml(activity.lastRecordAt || 'မရှိ')}<br>တင်သည့်အချိန်: ${escapeHtml(date)}${flags.length ? `<br><strong style="color:#b91c1c;">⚠️ Fraud flags: ${escapeHtml(flags.join(', '))}</strong>` : '<br><span style="color:#166534;">✓ အလိုအလျောက် flag မတွေ့ပါ</span>'}</div>
+                    ${canReview ? `<div class="claim-actions"><button type="button" class="approve" data-claim-id="${escapeHtml(claim.id)}" onclick="approveReferralClaim(this.dataset.claimId)">Approve & Mark Paid</button><button type="button" class="reject" data-claim-id="${escapeHtml(claim.id)}" onclick="rejectReferralClaim(this.dataset.claimId)">Reject</button></div>` : ''}
+                </div>`;
+            }).join('');
+        }
+
+        async function loadReferralClaims() {
+            const list = document.getElementById('claimList');
+            try {
+                const snapshot = await firestore.collection('referralClaims').get();
+                referralClaims = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+                renderReferralClaims();
+            } catch (error) {
+                console.warn('Referral claims read failed:', error);
+                list.innerHTML = '<div class="detail-empty">Referral claims ဖတ်မရပါ။ Firestore Rules တွင် admin read ခွင့် စစ်ပါ။</div>';
+            }
+        }
+
+        async function updateReferralClaim(claimId, nextStatus) {
+            const claim = referralClaims.find(item => item.id === claimId);
+            if (!claim) return setStatus('Claim မတွေ့ပါ။', true);
+            if (String(claim.status).toLowerCase() !== 'pending') return setStatus('ဒီ claim ကို ပြန်ပြောင်း၍မရပါ။', true);
+            if (nextStatus === 'Paid') {
+                const alreadyPaid = referralClaims.filter(item => item.referrerCode === claim.referrerCode && String(item.status).toLowerCase() === 'paid').reduce((sum, item) => sum + Number(item.rewardAmount || 0), 0);
+                if (alreadyPaid + Number(claim.rewardAmount || 0) > Number(claim.rewardCap || 100)) return setStatus(`Referrer ${claim.referrerCode} ၏ အများဆုံး reward limit ကျော်နေပါသည်။`, true);
+                if (calculateClaimFlags(claim, referralClaims).length && !window.confirm('Fraud flag ရှိနေပါသည်။ ဆက်ပြီး Paid လုပ်မလား?')) return;
+            }
+            try {
+                const claimRef = firestore.collection('referralClaims').doc(claimId);
+                await firestore.runTransaction(async transaction => {
+                    const snapshot = await transaction.get(claimRef);
+                    if (!snapshot.exists || String(snapshot.data()?.status).toLowerCase() !== 'pending') throw new Error('CLAIM_ALREADY_REVIEWED');
+                    const now = new Date().toISOString();
+                    transaction.update(claimRef, { status: nextStatus, reviewedAt: now, reviewedBy: 'admin-panel', updatedAt: now });
+                    if (nextStatus === 'Paid') transaction.set(firestore.collection('referralPayouts').doc(claimId), { claimId, referrerCode: claim.referrerCode, referredCode: claim.referredCode, phoneNumber: claim.phoneNumber, amount: Number(claim.rewardAmount || 0), status: 'Paid', paidAt: now });
+                });
+                await loadReferralClaims();
+                setStatus(`Referral claim ကို ${nextStatus} အဖြစ် ပြောင်းပြီးပါပြီ။`);
+            } catch (error) { setStatus(error.message === 'CLAIM_ALREADY_REVIEWED' ? 'ဒီ claim ကို အခြား admin က ပြောင်းပြီးပါပြီ။' : 'Claim status ပြောင်းမရပါ။ Firestore Rules ကို စစ်ပါ။', true); }
+        }
+
+        function approveReferralClaim(claimId) { if (window.confirm('ဖုန်းဘေလ် ထည့်ပြီး Paid အဖြစ် သတ်မှတ်မည်။ ဆက်လုပ်မလား?')) updateReferralClaim(claimId, 'Paid'); }
+        function rejectReferralClaim(claimId) { if (window.confirm('ဒီ referral claim ကို Reject လုပ်မည်။ ဆက်လုပ်မလား?')) updateReferralClaim(claimId, 'Rejected'); }
 
         function renderResult(code, data) {
             const profile = data.profile || {};

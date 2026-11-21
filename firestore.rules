@@ -1,0 +1,69 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function admin() { return signedIn() && request.auth.token.admin == true; }
+
+    // The Home app should use Firebase Auth (anonymous or custom-token) before
+    // enabling these production rules. Do not use a client-side PIN as proof of admin.
+    match /referralAttributions/{referredCode} {
+      allow read: if admin() || (signedIn() && request.auth.uid == referredCode);
+      allow create: if signedIn()
+        && request.auth.uid == referredCode
+        && request.resource.data.referredCode == referredCode
+        && request.resource.data.status == 'attributed'
+        && !exists(/databases/$(database)/documents/referralAttributions/$(referredCode));
+      allow update, delete: if admin();
+    }
+
+    match /referralDevices/{deviceId} {
+      allow read: if admin();
+      allow create: if signedIn()
+        && request.resource.data.referredProfileCode == request.auth.uid
+        && !exists(/databases/$(database)/documents/referralDevices/$(deviceId));
+      allow update, delete: if admin();
+    }
+
+    match /referralUsers/{profileCode} {
+      allow read: if admin() || (signedIn() && request.auth.uid == profileCode);
+      allow create, update: if signedIn()
+        && request.auth.uid == profileCode
+        && request.resource.data.profileCode == profileCode;
+      allow delete: if admin();
+    }
+
+    match /referralPhones/{phoneId} {
+      allow read: if admin();
+      // A phone reservation is immutable, so a second claim cannot reserve it.
+      allow create: if signedIn()
+        && request.resource.data.referredCode == request.auth.uid
+        && !exists(/databases/$(database)/documents/referralPhones/$(phoneId));
+      allow update, delete: if admin();
+    }
+
+    match /referralClaims/{claimId} {
+      allow read: if admin() || (signedIn() && request.auth.uid == claimId);
+      allow create: if signedIn()
+        && request.auth.uid == claimId
+        && request.resource.data.referredCode == claimId
+        && request.resource.data.status == 'Pending'
+        && request.resource.data.rewardAmount >= 10
+        && request.resource.data.rewardAmount <= 20
+        && !exists(/databases/$(database)/documents/referralClaims/$(claimId));
+      allow update: if admin();
+      allow delete: if admin();
+    }
+
+    match /referralPayouts/{payoutId} {
+      allow read: if admin();
+      allow write: if admin();
+    }
+
+    // Existing device registry: keep app registration possible, but reserve
+    // delete/write review for an authenticated admin in production.
+    match /devices/{deviceId} {
+      allow read, create, update: if signedIn();
+      allow delete: if admin();
+    }
+  }
+}

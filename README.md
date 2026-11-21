@@ -14,6 +14,8 @@ DailyWage Firebase Realtime Database ထဲရှိ Profile, records, AI chat �
 - Device registry count နှင့် profile တစ်ခုချင်းစီ၏ device ID အတို
 - User တစ်ဦးချင်းစီ၏ daily wage income/expense records
 - User app မှ Firebase သို့ sync လုပ်ထားသော AI chat history
+- Referral link/code, referral attribution, active-user activity summary နှင့် phone reward claims
+- Pending/Paid/Rejected claim status၊ device/phone/self-referral fraud flags နှင့် Approve & Mark Paid/Reject controls
 - User row/detail ထဲမှ confirm ပြီး Profile, records, AI chat နှင့် device registry ကို ဖျက်ခြင်း
 
 Password၊ screen lock၊ password reset request နှင့် password reset email စနစ်များ မပါဝင်ပါ။
@@ -29,6 +31,14 @@ User page ကို ပုံမှန်အတိုင်း တိုက်�
 ## Firebase ပြင်ဆင်ရန်
 
 Realtime Database Rules တွင် admin page အတွက် `users` path ကို read နှင့် selected user အတွက် delete ခွင့်ရှိရန် လိုအပ်ပါသည်။ `users/{profileCode}` ထဲတွင် `records` နှင့် `aiChatHistory` ပါဝင်ပါသည်။ Firestore Rules တွင် `devices` collection ကို app write/admin read နှင့် delete ခွင့်ရှိရန် သီးခြားသတ်မှတ်ရပါမည်။ ဖျက်ခလုတ်သည် browser `confirm` ပြီးမှသာ request ပို့ပါသည်။
+
+## Referral Campaign
+
+Home app ၏ `🎁 ဖိတ်ခေါ်` tab တွင် user တစ်ဦးစီအတွက် `?ref=PROFILECODE` referral link ပေါ်ပါသည်။ Referral link ဖြင့် ဝင်လာသူကို `referralAttributions/{referredCode}` နှင့် `referralDevices/{deviceId}` တွင် တစ်ကြိမ်သာ မှတ်တမ်းတင်ပြီး self-referral ကို ပိတ်ထားပါသည်။ Home app သည် `referralUsers/{profileCode}` တွင် record count, income/expense count, OT hours, first/last record date, last active time နှင့် app open count ကို sync လုပ်ပါသည်။
+
+Claim တစ်ခုကို `referralClaims/{referredCode}` တွင် သိမ်းပြီး ဖုန်းနံပါတ်ကို `referralPhones/{phoneId}` ဖြင့် unique reserve လုပ်ပါသည်။ Claim တစ်ကြိမ် reward သည် ၂၀฿ ဖြစ်ပြီး referrer တစ်ဦးအတွက် campaign အများဆုံး ၁၀၀฿ သတ်မှတ်ထားပါသည်။ Admin သည် Activity summary နှင့် fraud flags စစ်ပြီး ဖုန်းဘေလ်ကို အပြင်ဘက်မှ ထည့်ပြီးနောက် `Approve & Mark Paid` ကိုနှိပ်ရပါမည်။ Paid ဖြစ်သည့်အခါ `referralPayouts/{claimId}` တွင် payout audit record ထည့်ပါသည်။
+
+Referral data collections များ၏ production rules နမူနာကို [`firestore.rules`](./firestore.rules) တွင် ထည့်ပေးထားပါသည်။ ထို rules သည် Firebase Authentication custom claim `admin == true` ကို သုံးပါသည်။ လက်ရှိ static Admin PIN သည် UI gate သာဖြစ်ပြီး Firebase Security Rules အတွက် admin အထောက်အထား မဟုတ်ပါ။ Production တွင် Home app ကို Firebase Auth (anonymous/custom token) ဖြင့် authenticate မလုပ်မချင်း ထို rules များကို တိုက်ရိုက် deploy မလုပ်ပါနှင့်။ Client-side fingerprint/phone check သည် best-effort ဖြစ်ပြီး အမှန်တကယ် မလိမ်နိုင်အောင် server-side Cloud Function/App Check နှင့် admin authentication လိုအပ်ပါသည်။
 
 ## Security မှတ်ချက်
 
