@@ -146,6 +146,11 @@
                 <div class="referral-summary"><div class="stat"><small>Pending</small><strong id="pendingClaimCount">0</strong></div><div class="stat"><small>Paid</small><strong id="paidClaimCount">0</strong></div><div class="stat"><small>Fraud flags</small><strong id="fraudClaimCount">0</strong></div></div>
                 <div id="claimList" class="claim-list"><div class="empty">Referral claim data ရယူနေပါသည်...</div></div>
             </section>
+            <section class="card">
+                <div class="admin-toolbar"><h2>💸 Reward Withdrawals</h2><button class="refresh-button" type="button" onclick="loadReferralWithdrawals()">↻ Refresh</button></div>
+                <div class="notice">Withdrawal ကို စစ်ဆေးပြီး ဖုန်းဘေလ်ထည့်ပြီးနောက် `Deduct Balance & Mark Paid` ကိုနှိပ်ပါ။ ထိုအချိန်တွင် User ၏ ဆုငွေလက်ကျန်မှ ပမာဏကို transaction ဖြင့် နုတ်ပါမည်။</div>
+                <div id="withdrawalList" class="claim-list"><div class="empty">Withdrawal data ရယူနေပါသည်...</div></div>
+            </section>
         </section>
     </main>
 
@@ -166,6 +171,7 @@
         const ADMIN_PIN_HASH = '08f8881ee389cd2dbc13b3adb69030273cc675e1d5dac1d58004e70444fb11e4';
         let profileUsers = [];
         let referralClaims = [];
+        let referralWithdrawals = [];
 
         async function loadDeviceCount() {
             try {
@@ -305,6 +311,7 @@
                 await loadDeviceCount();
                 await loadDeviceDirectory();
                 await loadReferralClaims();
+                await loadReferralWithdrawals();
                 setStatus(`Profile data ${profileUsers.length} ယောက် ရှိပါသည်။`);
             } catch (error) {
                 console.error(error);
@@ -407,7 +414,10 @@
                     if (!snapshot.exists || String(snapshot.data()?.status).toLowerCase() !== 'pending') throw new Error('CLAIM_ALREADY_REVIEWED');
                     const now = new Date().toISOString();
                     transaction.update(claimRef, { status: nextStatus, reviewedAt: now, reviewedBy: 'admin-panel', updatedAt: now });
-                    if (nextStatus === 'Paid') transaction.set(firestore.collection('referralPayouts').doc(claimId), { claimId, referrerCode: claim.referrerCode, referredCode: claim.referredCode, phoneNumber: claim.phoneNumber, amount: Number(claim.rewardAmount || 0), status: 'Paid', paidAt: now });
+                    if (nextStatus === 'Paid') {
+                        transaction.set(firestore.collection('referralBalances').doc(claim.referrerCode), { referrerCode: claim.referrerCode, availableBalance: firebase.firestore.FieldValue.increment(Number(claim.rewardAmount || 0)), earnedTotal: firebase.firestore.FieldValue.increment(Number(claim.rewardAmount || 0)), updatedAt: now }, { merge: true });
+                        transaction.set(firestore.collection('referralPayouts').doc(claimId), { claimId, referrerCode: claim.referrerCode, referredCode: claim.referredCode, phoneNumber: claim.phoneNumber, amount: Number(claim.rewardAmount || 0), status: 'RewardApproved', paidAt: now });
+                    }
                 });
                 await loadReferralClaims();
                 setStatus(`Referral claim ကို ${nextStatus} အဖြစ် ပြောင်းပြီးပါပြီ။`);
@@ -416,6 +426,55 @@
 
         function approveReferralClaim(claimId) { if (window.confirm('ဖုန်းဘေလ် ထည့်ပြီး Paid အဖြစ် သတ်မှတ်မည်။ ဆက်လုပ်မလား?')) updateReferralClaim(claimId, 'Paid'); }
         function rejectReferralClaim(claimId) { if (window.confirm('ဒီ referral claim ကို Reject လုပ်မည်။ ဆက်လုပ်မလား?')) updateReferralClaim(claimId, 'Rejected'); }
+
+        function renderReferralWithdrawals() {
+            const list = document.getElementById('withdrawalList');
+            if (!referralWithdrawals.length) { list.innerHTML = '<div class="empty">Withdrawal request မရှိသေးပါ။</div>'; return; }
+            list.innerHTML = referralWithdrawals.map(item => {
+                const canReview = String(item.status).toLowerCase() === 'pending';
+                return `<div class="claim-row"><div class="claim-head"><strong>${escapeHtml(item.referrerName || item.referrerCode || 'User မသိ')}</strong><span class="badge ${claimStatusClass(item.status)}">${escapeHtml(item.status || 'Pending')}</span></div><div class="claim-meta">Profile: ${escapeHtml(item.referrerCode || '')}<br>Phone: <strong>${escapeHtml(item.phoneNumber || '')}</strong> · ထုတ်ယူငွေ: <strong>${escapeHtml(item.amount || 0)}฿</strong><br>တောင်းခံချိန်: ${escapeHtml(item.createdAt || '')}${item.reviewedAt ? `<br>စိစစ်ချိန်: ${escapeHtml(item.reviewedAt)}` : ''}</div>${canReview ? `<div class="claim-actions"><button type="button" class="approve" data-withdrawal-id="${escapeHtml(item.id)}" onclick="processReferralWithdrawal(this.dataset.withdrawalId)">Deduct Balance & Mark Paid</button><button type="button" class="reject" data-withdrawal-id="${escapeHtml(item.id)}" onclick="rejectReferralWithdrawal(this.dataset.withdrawalId)">Reject</button></div>` : ''}</div>`;
+            }).join('');
+        }
+
+        async function loadReferralWithdrawals() {
+            const list = document.getElementById('withdrawalList');
+            try {
+                const snapshot = await firestore.collection('referralWithdrawals').get();
+                referralWithdrawals = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+                renderReferralWithdrawals();
+            } catch (error) { console.warn('Referral withdrawal read failed:', error); list.innerHTML = '<div class="detail-empty">Withdrawal data ဖတ်မရပါ။ Firestore Rules ကို စစ်ပါ။</div>'; }
+        }
+
+        async function processReferralWithdrawal(withdrawalId) {
+            const withdrawal = referralWithdrawals.find(item => item.id === withdrawalId);
+            if (!withdrawal || String(withdrawal.status).toLowerCase() !== 'pending') return setStatus('ဒီ withdrawal ကို ပြန်စိစစ်၍မရပါ။', true);
+            if (!window.confirm(`${withdrawal.referrerCode} ၏ ${withdrawal.amount}฿ ကို လက်ကျန်မှ နုတ်ပြီး Paid လုပ်မည်။ ဖုန်းဘေလ်ထည့်ပြီးပြီလား?`)) return;
+            try {
+                const withdrawalRef = firestore.collection('referralWithdrawals').doc(withdrawalId);
+                const balanceRef = firestore.collection('referralBalances').doc(withdrawal.referrerCode);
+                await firestore.runTransaction(async transaction => {
+                    const withdrawalSnapshot = await transaction.get(withdrawalRef);
+                    const balanceSnapshot = await transaction.get(balanceRef);
+                    if (!withdrawalSnapshot.exists || String(withdrawalSnapshot.data()?.status).toLowerCase() !== 'pending') throw new Error('WITHDRAWAL_ALREADY_REVIEWED');
+                    const balance = balanceSnapshot.exists ? balanceSnapshot.data() : {};
+                    const available = Number(balance.availableBalance || 0);
+                    const amount = Number(withdrawal.amount || 0);
+                    if (available < amount) throw new Error('INSUFFICIENT_BALANCE');
+                    const now = new Date().toISOString();
+                    transaction.update(withdrawalRef, { status: 'Paid', reviewedAt: now, reviewedBy: 'admin-panel' });
+                    transaction.set(balanceRef, { availableBalance: firebase.firestore.FieldValue.increment(-amount), paidOutTotal: firebase.firestore.FieldValue.increment(amount), updatedAt: now }, { merge: true });
+                    transaction.set(firestore.collection('referralPayouts').doc(`withdrawal_${withdrawalId}`), { withdrawalId, referrerCode: withdrawal.referrerCode, phoneNumber: withdrawal.phoneNumber, amount, status: 'Paid', paidAt: now });
+                });
+                await loadReferralWithdrawals();
+                setStatus('ဖုန်းဘေလ်ပေးချေပြီး ဆုငွေလက်ကျန်မှ နုတ်ပြီးပါပြီ။');
+            } catch (error) { setStatus(error.message === 'INSUFFICIENT_BALANCE' ? 'လက်ကျန်မလုံလောက်ပါ။ Claim reward balance ကို စစ်ပါ။' : error.message === 'WITHDRAWAL_ALREADY_REVIEWED' ? 'ဒီ withdrawal ကို အခြား admin က စိစစ်ပြီးပါပြီ။' : 'Withdrawal မလုပ်နိုင်ပါ။ Firestore Rules ကို စစ်ပါ။', true); }
+        }
+
+        async function rejectReferralWithdrawal(withdrawalId) {
+            if (!window.confirm('ဒီ withdrawal request ကို Reject လုပ်မည်။ ဆက်လုပ်မလား?')) return;
+            try { await firestore.collection('referralWithdrawals').doc(withdrawalId).update({ status: 'Rejected', reviewedAt: new Date().toISOString(), reviewedBy: 'admin-panel' }); await loadReferralWithdrawals(); setStatus('Withdrawal ကို Reject လုပ်ပြီးပါပြီ။'); }
+            catch (error) { setStatus('Withdrawal reject မလုပ်နိုင်ပါ။ Firestore Rules ကို စစ်ပါ။', true); }
+        }
 
         function renderResult(code, data) {
             const profile = data.profile || {};

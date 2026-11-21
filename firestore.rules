@@ -59,6 +59,21 @@ service cloud.firestore {
       allow write: if admin();
     }
 
+    match /referralBalances/{profileCode} {
+      allow read: if admin() || (signedIn() && request.auth.uid == profileCode);
+      // Balance changes must be made by the Admin transaction only.
+      allow create, update, delete: if admin();
+    }
+
+    match /referralWithdrawals/{withdrawalId} {
+      allow read: if admin() || (signedIn() && resource.data.referrerCode == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.referrerCode == request.auth.uid
+        && request.resource.data.status == 'Pending'
+        && request.resource.data.amount >= 20;
+      allow update, delete: if admin();
+    }
+
     // Existing device registry: keep app registration possible, but reserve
     // delete/write review for an authenticated admin in production.
     match /devices/{deviceId} {
