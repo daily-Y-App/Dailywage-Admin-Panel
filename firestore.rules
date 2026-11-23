@@ -85,6 +85,27 @@ service cloud.firestore {
       allow update, delete: if admin();
     }
 
+    // Standalone Dailywage-Share landing-page activity. The Share page records
+    // one referral event per device; Admin is the only reader/reviewer.
+    match /shareReferrals/{deviceId} {
+      allow read: if admin();
+      allow create: if signedIn()
+        && request.resource.data.referredDeviceId == deviceId
+        && request.resource.data.referrerCode is string;
+      allow update: if signedIn()
+        && resource.data.referrerCode == request.resource.data.referrerCode
+        && request.resource.data.referredDeviceId == deviceId;
+      allow delete: if admin();
+    }
+
+    match /shareReferralDevices/{deviceId} {
+      allow read: if admin();
+      allow create: if signedIn()
+        && request.resource.data.deviceId == deviceId
+        && request.resource.data.referrerCode is string;
+      allow update, delete: if admin();
+    }
+
     // Existing device registry: keep app registration possible, but reserve
     // delete/write review for an authenticated admin in production.
     match /devices/{deviceId} {

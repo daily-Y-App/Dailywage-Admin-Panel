@@ -152,6 +152,11 @@
                 <div id="attributionList" class="claim-list"><div class="empty">Referral activity ရယူနေပါသည်...</div></div>
             </section>
             <section class="card">
+                <div class="admin-toolbar"><h2>📤 Share Landing Activity</h2><button class="refresh-button" type="button" onclick="loadShareReferralActivity()">↻ Refresh</button></div>
+                <div class="notice">Dailywage-Share repo မှ ဝင်ရောက်/Download လုပ်ထားသော referral device များကို စစ်ဆေးရန်။ Device တစ်ခုကို Referral Code တစ်ခုတည်းနှင့်သာ မှတ်တမ်းတင်ထားပါသည်။</div>
+                <div id="shareReferralList" class="claim-list"><div class="empty">Share activity ရယူနေပါသည်...</div></div>
+            </section>
+            <section class="card">
                 <div class="admin-toolbar"><h2>💸 Reward Withdrawals</h2><button class="refresh-button" type="button" onclick="loadReferralWithdrawals()">↻ Refresh</button></div>
                 <div class="notice">Withdrawal ကို စစ်ဆေးပြီး ဖုန်းဘေလ်ထည့်ပြီးနောက် `Deduct Balance & Mark Paid` ကိုနှိပ်ပါ။ ထိုအချိန်တွင် User ၏ ဆုငွေလက်ကျန်မှ ပမာဏကို transaction ဖြင့် နုတ်ပါမည်။</div>
                 <div id="withdrawalPendingNotice" class="notice" style="background:#fef3c7;border-color:#fcd34d;color:#92400e;font-weight:800;">🔔 Pending withdrawal notification စစ်ဆေးနေပါသည်...</div>
@@ -179,6 +184,7 @@
         let referralClaims = [];
         let referralWithdrawals = [];
         let referralAttributions = [];
+        let shareReferralActivity = [];
 
         async function loadDeviceCount() {
             try {
@@ -319,6 +325,7 @@
                 await loadDeviceDirectory();
                 await loadReferralClaims();
                 await loadReferralAttributions();
+                await loadShareReferralActivity();
                 await loadReferralWithdrawals();
                 setStatus(`Profile data ${profileUsers.length} ယောက် ရှိပါသည်။`);
             } catch (error) {
@@ -419,6 +426,17 @@
                     return `<div class="claim-row"><div class="claim-head"><strong>${escapeHtml(item.referrerCode || 'Referrer မသိ')} → ${escapeHtml(item.referredCode || 'Referred မသိ')}</strong><span class="badge ${active ? 'paid' : 'pending'}">${active ? 'Active ဖြစ်နိုင်' : 'စစ်ဆေးရန်'}</span></div><div class="claim-meta">Device: ${escapeHtml(item.referredDeviceId || 'မသိရသေးပါ')}<br>Records: ${escapeHtml(activity.recordCount || 0)} · Income: ${escapeHtml(activity.incomeCount || 0)} · Expense: ${escapeHtml(activity.expenseCount || 0)} · OT: ${escapeHtml(activity.otHours || 0)} hr<br>App ဖွင့်မှု: ${escapeHtml(activity.appOpenCount || 0)} · နောက်ဆုံးအသုံးပြုချိန်: ${escapeHtml(activity.lastActiveAt || 'မသိရသေးပါ')}<br>Referral မှတ်တမ်းတင်ချိန်: ${escapeHtml(item.createdAt || '')}</div></div>`;
                 }).join('');
             } catch (error) { console.warn('Referral attribution read failed:', error); list.innerHTML = '<div class="detail-empty">Referral activity ဖတ်မရပါ။ Firestore Rules ကို စစ်ပါ။</div>'; }
+        }
+
+        async function loadShareReferralActivity() {
+            const list = document.getElementById('shareReferralList');
+            if (!list) return;
+            try {
+                const snapshot = await firestore.collection('shareReferrals').get();
+                shareReferralActivity = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => String(b.lastSeenAt || b.firstSeenAt || '').localeCompare(String(a.lastSeenAt || a.firstSeenAt || '')));
+                if (!shareReferralActivity.length) { list.innerHTML = '<div class="empty">Share landing activity မရှိသေးပါ။</div>'; return; }
+                list.innerHTML = shareReferralActivity.map(item => `<div class="claim-row"><div class="claim-head"><strong>RC: ${escapeHtml(item.referrerCode || 'မသိရသေးပါ')}</strong><span class="badge ${item.downloadedAt ? 'paid' : 'pending'}">${item.downloadedAt ? 'Downloaded' : 'Visited'}</span></div><div class="claim-meta">Device: ${escapeHtml(item.referredDeviceId || item.id)}<br>ဝင်ရောက်ချိန်: ${escapeHtml(item.firstSeenAt || 'မသိရသေးပါ')} · နောက်ဆုံး: ${escapeHtml(item.lastSeenAt || 'မသိရသေးပါ')}<br>Download: ${escapeHtml(item.downloadedAt || 'မလုပ်ရသေးပါ')}<br>Language: ${escapeHtml(item.language || '')}</div></div>`).join('');
+            } catch (error) { console.warn('Share referral activity read failed:', error); list.innerHTML = '<div class="detail-empty">Share activity ဖတ်မရပါ။ Firestore Rules တွင် admin read ခွင့် စစ်ပါ။</div>'; }
         }
 
         async function updateReferralClaim(claimId, nextStatus) {
