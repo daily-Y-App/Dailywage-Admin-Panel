@@ -162,6 +162,12 @@
                 <div id="withdrawalPendingNotice" class="notice" style="background:#fef3c7;border-color:#fcd34d;color:#92400e;font-weight:800;">🔔 Pending withdrawal notification စစ်ဆေးနေပါသည်...</div>
                 <div id="withdrawalList" class="claim-list"><div class="empty">Withdrawal data ရယူနေပါသည်...</div></div>
             </section>
+            <section class="card">
+                <div class="admin-toolbar"><h2>🧾 Share Count Withdrawal Requests</h2><button class="refresh-button" type="button" onclick="subscribeWithdrawRequests(true)">↻ Refresh</button></div>
+                <div class="notice">`withdraw_requests` collection ကို Firestore `onSnapshot()` ဖြင့် real-time စောင့်ကြည့်ထားပါသည်။ Share Count၊ phone၊ device နှင့် referred summary ကို စစ်ပြီးမှ Approve &amp; Paid လုပ်ပါ။</div>
+                <div id="shareRequestPendingNotice" class="notice" style="background:#fef3c7;border-color:#fcd34d;color:#92400e;font-weight:800;">🔔 Share Count request များကို စစ်ဆေးနေပါသည်...</div>
+                <div id="shareRequestList" class="claim-list"><div class="empty">Real-time request data ရယူနေပါသည်...</div></div>
+            </section>
         </section>
     </main>
 
@@ -185,6 +191,8 @@
         let referralWithdrawals = [];
         let referralAttributions = [];
         let shareReferralActivity = [];
+        let withdrawRequests = [];
+        let withdrawRequestsUnsubscribe = null;
 
         async function loadDeviceCount() {
             try {
@@ -327,6 +335,7 @@
                 await loadReferralAttributions();
                 await loadShareReferralActivity();
                 await loadReferralWithdrawals();
+                subscribeWithdrawRequests();
                 setStatus(`Profile data ${profileUsers.length} ယောက် ရှိပါသည်။`);
             } catch (error) {
                 console.error(error);
@@ -358,7 +367,7 @@
 
         function claimStatusClass(status) {
             const value = String(status || '').toLowerCase();
-            return value === 'paid' ? 'paid' : value === 'rejected' ? 'rejected' : 'pending';
+            return value === 'paid' || value === 'approved_paid' ? 'paid' : value === 'rejected' ? 'rejected' : 'pending';
         }
 
         function calculateClaimFlags(claim, allClaims) {
@@ -406,6 +415,11 @@
             try {
                 const snapshot = await firestore.collection('referralClaims').get();
                 referralClaims = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+                const paidCounts = referralClaims.reduce((map, claim) => {
+                    if (String(claim.status || '').toLowerCase() === 'paid' && claim.referrerCode) map.set(claim.referrerCode, (map.get(claim.referrerCode) || 0) + 1);
+                    return map;
+                }, new Map());
+                await Promise.all(Array.from(paidCounts.entries()).map(([referrerCode, shareCount]) => firestore.collection('referralBalances').doc(referrerCode).set({ referrerCode, shareCount, updatedAt: new Date().toISOString() }, { merge: true })));
                 renderReferralClaims();
             } catch (error) {
                 console.warn('Referral claims read failed:', error);
@@ -456,7 +470,7 @@
                     const now = new Date().toISOString();
                     transaction.update(claimRef, { status: nextStatus, reviewedAt: now, reviewedBy: 'admin-panel', updatedAt: now });
                     if (nextStatus === 'Paid') {
-                        transaction.set(firestore.collection('referralBalances').doc(claim.referrerCode), { referrerCode: claim.referrerCode, availableBalance: firebase.firestore.FieldValue.increment(Number(claim.rewardAmount || 0)), earnedTotal: firebase.firestore.FieldValue.increment(Number(claim.rewardAmount || 0)), updatedAt: now }, { merge: true });
+                        transaction.set(firestore.collection('referralBalances').doc(claim.referrerCode), { referrerCode: claim.referrerCode, availableBalance: firebase.firestore.FieldValue.increment(Number(claim.rewardAmount || 0)), earnedTotal: firebase.firestore.FieldValue.increment(Number(claim.rewardAmount || 0)), shareCount: firebase.firestore.FieldValue.increment(1), updatedAt: now }, { merge: true });
                         transaction.set(firestore.collection('referralPayouts').doc(claimId), { claimId, referrerCode: claim.referrerCode, referredCode: claim.referredCode, phoneNumber: claim.phoneNumber, amount: Number(claim.rewardAmount || 0), status: 'RewardApproved', paidAt: now });
                     }
                 });
@@ -519,6 +533,79 @@
             if (!window.confirm('ဒီ withdrawal request ကို Reject လုပ်မည်။ ဆက်လုပ်မလား?')) return;
             try { const now = new Date().toISOString(); await firestore.collection('referralWithdrawals').doc(withdrawalId).update({ status: 'Rejected', reviewedAt: now, reviewedBy: 'admin-panel' }); await firestore.collection('adminNotifications').doc(withdrawalId).set({ status: 'Resolved', resolution: 'Rejected', reviewedAt: now, reviewedBy: 'admin-panel' }, { merge: true }); await loadReferralWithdrawals(); setStatus('Withdrawal ကို Reject လုပ်ပြီးပါပြီ။'); }
             catch (error) { setStatus('Withdrawal reject မလုပ်နိုင်ပါ။ Firestore Rules ကို စစ်ပါ။', true); }
+        }
+
+        function renderWithdrawRequests() {
+            const list = document.getElementById('shareRequestList');
+            const notice = document.getElementById('shareRequestPendingNotice');
+            const pending = withdrawRequests.filter(item => String(item.status || '').toLowerCase() === 'pending').length;
+            if (notice) notice.innerText = pending ? `🔔 Share Count withdrawal request ${pending} ခု စိစစ်ရန်ရှိပါသည်။` : '✅ Pending Share Count request မရှိသေးပါ။';
+            if (!withdrawRequests.length) { list.innerHTML = '<div class="empty">Share Count withdrawal request မရှိသေးပါ။</div>'; return; }
+            list.innerHTML = withdrawRequests.map(item => {
+                const status = String(item.status || 'pending').toLowerCase();
+                const canReview = status === 'pending';
+                const summary = item.referredSummary || {};
+                const created = item.createdAtIso || (item.createdAt?.toDate ? item.createdAt.toDate().toLocaleString() : '');
+                return `<div class="claim-row ${item.deviceId ? '' : 'fraud'}">
+                    <div class="claim-head"><strong>${escapeHtml(item.userName || 'အမည်မရှိ')} · ${escapeHtml(item.userId || item.profileCode || 'ID မသိ')}</strong><span class="badge ${claimStatusClass(status)}">${escapeHtml(item.status || 'pending')}</span></div>
+                    <div class="claim-meta">Profile/RC: <strong>${escapeHtml(item.profileCode || item.userId || '')}</strong><br>Phone: <strong>${escapeHtml(item.phoneNumber || '')}</strong> · Email: ${escapeHtml(item.email || 'မထည့်ထားပါ')}<br>Share Count: <strong>${escapeHtml(item.shareCountAtRequest || 0)}</strong> / Target ${escapeHtml(summary.targetCount || 5)} · Amount: <strong>${escapeHtml(item.amount || 0)}฿</strong><br>Referred summary: valid ${escapeHtml(summary.validShareCount || item.shareCountAtRequest || 0)}, remaining ${escapeHtml(summary.remaining || 0)}, balance ${escapeHtml(summary.balanceAtRequest || 0)}฿<br>Device ID: <strong>${escapeHtml(item.deviceId || 'မသိရသေးပါ')}</strong><br>တင်သည့်အချိန်: ${escapeHtml(created)}</div>
+                    ${canReview ? `<div class="claim-actions"><button type="button" class="approve" data-request-id="${escapeHtml(item.id)}" onclick="approveWithdrawRequest(this.dataset.requestId)">Approve &amp; Paid</button><button type="button" class="reject" data-request-id="${escapeHtml(item.id)}" onclick="rejectWithdrawRequest(this.dataset.requestId)">Reject</button></div>` : ''}
+                </div>`;
+            }).join('');
+        }
+
+        function subscribeWithdrawRequests(forceRefresh = false) {
+            if (forceRefresh && withdrawRequestsUnsubscribe) withdrawRequestsUnsubscribe();
+            if (withdrawRequestsUnsubscribe && !forceRefresh) return;
+            const list = document.getElementById('shareRequestList');
+            withdrawRequestsUnsubscribe = firestore.collection('withdraw_requests').onSnapshot(snapshot => {
+                withdrawRequests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => String(b.createdAtIso || '').localeCompare(String(a.createdAtIso || '')));
+                renderWithdrawRequests();
+            }, error => {
+                console.warn('withdraw_requests onSnapshot failed:', error);
+                list.innerHTML = '<div class="detail-empty">withdraw_requests ဖတ်မရပါ။ Firebase Auth/admin custom claim နှင့် Firestore Rules ကို စစ်ပါ။</div>';
+            });
+        }
+
+        async function approveWithdrawRequest(requestId) {
+            const request = withdrawRequests.find(item => item.id === requestId);
+            if (!request || String(request.status || '').toLowerCase() !== 'pending') return setStatus('ဒီ request ကို ပြန်စိစစ်၍မရပါ။', true);
+            if (!window.confirm(`${request.profileCode || request.userId} ၏ ${request.amount || 0}฿ ကို ဖုန်းဘေလ်ထည့်ပြီး Approved/Paid လုပ်မည်။ ဆက်လုပ်မလား?`)) return;
+            try {
+                const requestRef = firestore.collection('withdraw_requests').doc(requestId);
+                const balanceRef = firestore.collection('referralBalances').doc(request.profileCode || request.userId);
+                await firestore.runTransaction(async transaction => {
+                    const requestSnapshot = await transaction.get(requestRef);
+                    const balanceSnapshot = await transaction.get(balanceRef);
+                    if (!requestSnapshot.exists || String(requestSnapshot.data()?.status || '').toLowerCase() !== 'pending') throw new Error('REQUEST_ALREADY_REVIEWED');
+                    const amount = Number(requestSnapshot.data()?.amount || 0);
+                    const balance = balanceSnapshot.exists ? balanceSnapshot.data() || {} : {};
+                    if (Number(balance.availableBalance || 0) < amount) throw new Error('INSUFFICIENT_BALANCE');
+                    const now = new Date().toISOString();
+                    transaction.update(requestRef, { status: 'approved_paid', reviewedAt: now, reviewedBy: 'admin-panel', paidAt: now });
+                    transaction.set(firestore.collection('referralWithdrawals').doc(requestId), { status: 'Paid', reviewedAt: now, reviewedBy: 'admin-panel', withdrawRequestId: requestId }, { merge: true });
+                    transaction.set(firestore.collection('adminNotifications').doc(requestId), { status: 'Resolved', resolution: 'Paid', reviewedAt: now, reviewedBy: 'admin-panel' }, { merge: true });
+                    transaction.set(balanceRef, { availableBalance: firebase.firestore.FieldValue.increment(-amount), paidOutTotal: firebase.firestore.FieldValue.increment(amount), lastWithdrawRequestId: requestId, lastWithdrawStatus: 'approved_paid', updatedAt: now }, { merge: true });
+                    transaction.set(firestore.collection('referralPayouts').doc(`share_request_${requestId}`), { requestId, profileCode: request.profileCode || request.userId, phoneNumber: request.phoneNumber || '', amount, status: 'approved_paid', paidAt: now, source: 'withdraw_requests' });
+                });
+                setStatus('Share Count request ကို ဖုန်းဘေလ်ပေးချေပြီး Approved/Paid လုပ်ပြီးပါပြီ။');
+            } catch (error) { setStatus(error.message === 'INSUFFICIENT_BALANCE' ? 'လက်ကျန်မလုံလောက်ပါ။' : error.message === 'REQUEST_ALREADY_REVIEWED' ? 'ဒီ request ကို အခြား admin က စိစစ်ပြီးပါပြီ။' : 'Request approve မလုပ်နိုင်ပါ။ Rules/Auth ကို စစ်ပါ။', true); }
+        }
+
+        async function rejectWithdrawRequest(requestId) {
+            if (!window.confirm('ဒီ Share Count withdrawal request ကို Reject လုပ်မည်။ ဆက်လုပ်မလား?')) return;
+            try {
+                const now = new Date().toISOString();
+                await firestore.runTransaction(async transaction => {
+                    const requestRef = firestore.collection('withdraw_requests').doc(requestId);
+                    const snapshot = await transaction.get(requestRef);
+                    if (!snapshot.exists || String(snapshot.data()?.status || '').toLowerCase() !== 'pending') throw new Error('REQUEST_ALREADY_REVIEWED');
+                    transaction.update(requestRef, { status: 'rejected', reviewedAt: now, reviewedBy: 'admin-panel' });
+                    transaction.set(firestore.collection('referralWithdrawals').doc(requestId), { status: 'Rejected', reviewedAt: now, reviewedBy: 'admin-panel', withdrawRequestId: requestId }, { merge: true });
+                    transaction.set(firestore.collection('adminNotifications').doc(requestId), { status: 'Resolved', resolution: 'Rejected', reviewedAt: now, reviewedBy: 'admin-panel' }, { merge: true });
+                });
+                setStatus('Share Count withdrawal request ကို Reject လုပ်ပြီးပါပြီ။');
+            } catch (error) { setStatus(error.message === 'REQUEST_ALREADY_REVIEWED' ? 'ဒီ request ကို အခြား admin က စိစစ်ပြီးပါပြီ။' : 'Request reject မလုပ်နိုင်ပါ။ Firestore Rules ကို စစ်ပါ။', true); }
         }
 
         function renderResult(code, data) {

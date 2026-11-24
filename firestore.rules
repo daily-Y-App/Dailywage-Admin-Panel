@@ -65,6 +65,40 @@ service cloud.firestore {
       allow create, update, delete: if admin();
     }
 
+    // Share Count based withdrawal workflow. The client may create only a
+    // pending request for its own authenticated UID; status changes are admin-only.
+    match /withdraw_requests/{requestId} {
+      allow read: if admin() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.shareCountAtRequest >= 5
+        && request.resource.data.phoneNumber is string
+        && request.resource.data.deviceId is string
+        && request.resource.data.amount >= 20;
+      allow update, delete: if admin();
+    }
+
+    // Immutable reservations make duplicate phone/device requests fail inside
+    // the same client transaction. The document IDs are normalized/hash keys.
+    match /withdraw_request_phones/{phoneKey} {
+      allow read: if admin();
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.phoneKey == phoneKey
+        && !exists(/databases/$(database)/documents/withdraw_request_phones/$(phoneKey));
+      allow update, delete: if admin();
+    }
+
+    match /withdraw_request_devices/{deviceId} {
+      allow read: if admin();
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.deviceId == deviceId
+        && !exists(/databases/$(database)/documents/withdraw_request_devices/$(deviceId));
+      allow update, delete: if admin();
+    }
+
     match /referralWithdrawals/{withdrawalId} {
       allow read: if admin() || (signedIn() && resource.data.referrerCode == request.auth.uid);
       allow create: if signedIn()

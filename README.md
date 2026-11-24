@@ -16,6 +16,7 @@ DailyWage Firebase Realtime Database ထဲရှိ Profile, records, AI chat �
 - User app မှ Firebase သို့ sync လုပ်ထားသော AI chat history
 - Referral link/code, referral attribution, active-user activity summary နှင့် phone reward claims
 - Pending/Paid/Rejected claim status၊ device/phone/self-referral fraud flags နှင့် Approve & Mark Paid/Reject controls
+- Share Count withdrawal request များကို `withdraw_requests` မှ Firestore `onSnapshot()` ဖြင့် real-time ကြည့်ရှုခြင်း၊ Share Count/phone/device/referred summary ပြသခြင်းနှင့် `Approve & Paid`/`Reject` controls
 - User row/detail ထဲမှ confirm ပြီး Profile, records, AI chat နှင့် device registry ကို ဖျက်ခြင်း
 
 Password၊ screen lock၊ password reset request နှင့် password reset email စနစ်များ မပါဝင်ပါ။
@@ -39,6 +40,10 @@ Referral Campaign UI ကို ယခု `Dailywage-Share` repo တွင် သ
 Claim တစ်ခုကို `referralClaims/{referredCode}` တွင် သိမ်းပြီး ဖုန်းနံပါတ်ကို `referralPhones/{phoneId}` ဖြင့် unique reserve လုပ်ပါသည်။ Claim တစ်ကြိမ် reward သည် ၂၀฿ ဖြစ်ပြီး referrer တစ်ဦးအတွက် campaign အများဆုံး ၁၀၀฿ သတ်မှတ်ထားပါသည်။ Admin သည် Activity summary နှင့် fraud flags စစ်ပြီး ဖုန်းဘေလ်ကို အပြင်ဘက်မှ ထည့်ပြီးနောက် `Approve & Mark Paid` ကိုနှိပ်ရပါမည်။ Paid ဖြစ်သည့်အခါ `referralPayouts/{claimId}` တွင် payout audit record ထည့်ပါသည်။
 
 Approve လုပ်ပြီးသော referral reward သည် `referralBalances/{referrerCode}` တွင် `availableBalance` အဖြစ် တိုးပါသည်။ User သည် Home app မှ ဆုငွေထုတ်ယူရန် request တင်နိုင်ပြီး request ကို `referralWithdrawals/{withdrawalId}` တွင် Pending အဖြစ် သိမ်းပါသည်။ Admin သည် ဖုန်းဘေလ်ကို အမှန်တကယ်ထည့်ပြီး `Deduct Balance & Mark Paid` ကိုနှိပ်မှသာ transaction ဖြင့် `availableBalance` မှ တောင်းခံသည့်ပမာဏကို နုတ်ပြီး Withdrawal/Payout audit record သိမ်းပါသည်။ လက်ကျန်မလုံလောက်ပါက transaction က မအောင်မြင်ဘဲ ငွေမနုတ်ပါ။
+
+Referral claim တစ်ခုကို `Paid` လုပ်သည့် Admin transaction သည် `referralBalances/{referrerCode}.shareCount` ကိုလည်း ၁ တိုးပေးသည်။ Share repo သည် ထို field ကို valid Share Count အဖြစ်ဖတ်ပြီး target ၅ ပြည့်မှသာ `withdraw_requests` ထဲသို့ request တင်ခွင့်ပြုသည်။ Request တွင် `userId`, `profileCode`, `userName`, `phoneNumber`, `shareCountAtRequest`, `referredSummary`, `deviceId`, `amount`, `status: pending` နှင့် `createdAt` ပါသည်။ `withdraw_request_phones` နှင့် `withdraw_request_devices` immutable registry များကို transaction တစ်ခုတည်းအတွင်း ဖန်တီးသဖြင့် ဖုန်း/Device တူ request များကို client ဘက်တွင် ထပ်မတင်နိုင်ပါ။
+
+Admin Panel ၏ `Share Count Withdrawal Requests` section သည် `withdraw_requests` collection ကို `onSnapshot()` ဖြင့် နားထောင်သည်။ `Approve & Paid` လုပ်ရာတွင် request status ကို `approved_paid` ပြောင်းပြီး amount ကို `referralBalances.availableBalance` မှ transaction ဖြင့်နုတ်ကာ `referralPayouts/share_request_{requestId}` audit record သိမ်းသည်။ `Reject` လုပ်လျှင် status ကို `rejected` ပြောင်းသည်။
 
 Home app မှ share လုပ်သည့် personal referral link ကို တစ်ဖက် user က ဖွင့်ပြီး Profile/device ဖြင့် app ကို အသုံးပြုသောအခါ `referralAttributions` နှင့် `referralUsers` ထဲသို့ attribution၊ device၊ app open count၊ record count၊ income/expense count၊ OT hours နှင့် last active time များ sync လုပ်ပါသည်။ Admin Panel ၏ `Referral Activity` အပိုင်းတွင် Claim မတင်သေးသော referred user များကိုလည်း စစ်ဆေးနိုင်ပါသည်။ Withdrawal မတင်မီ Home app တွင် ဖုန်းနံပါတ်နှင့် Email နှစ်ခုလုံး ထည့်ရန်လိုပြီး Admin မှ ထိုအချက်အလက်များကို စစ်ဆေးပြီးမှ လက်ကျန်နုတ်ပေးပါသည်။
 
