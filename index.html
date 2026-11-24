@@ -168,6 +168,11 @@
                 <div id="shareRequestPendingNotice" class="notice" style="background:#fef3c7;border-color:#fcd34d;color:#92400e;font-weight:800;">🔔 Share Count request များကို စစ်ဆေးနေပါသည်...</div>
                 <div id="shareRequestList" class="claim-list"><div class="empty">Real-time request data ရယူနေပါသည်...</div></div>
             </section>
+            <section class="card">
+                <div class="admin-toolbar"><h2>💳 Payout Info Verification</h2><button class="refresh-button" type="button" onclick="subscribePayoutProfiles(true)">↻ Refresh</button></div>
+                <div class="notice">User က balance မရှိသေးခင် ကြိုသိမ်းထားသော TrueMoney / WavePay / KPay အချက်အလက်များကို ဤနေရာတွင် စစ်ဆေးပြီး Verify လုပ်ပါ။ Verify မလုပ်မချင်း request ကို Paid မလုပ်နိုင်ပါ။</div>
+                <div id="payoutProfileList" class="claim-list"><div class="empty">Payout profile data ရယူနေပါသည်...</div></div>
+            </section>
         </section>
     </main>
 
@@ -193,6 +198,8 @@
         let shareReferralActivity = [];
         let withdrawRequests = [];
         let withdrawRequestsUnsubscribe = null;
+        let payoutProfiles = [];
+        let payoutProfilesUnsubscribe = null;
 
         async function loadDeviceCount() {
             try {
@@ -336,6 +343,7 @@
                 await loadShareReferralActivity();
                 await loadReferralWithdrawals();
                 subscribeWithdrawRequests();
+                subscribePayoutProfiles();
                 setStatus(`Profile data ${profileUsers.length} ယောက် ရှိပါသည်။`);
             } catch (error) {
                 console.error(error);
@@ -567,6 +575,52 @@
             });
         }
 
+        function renderPayoutProfiles() {
+            const list = document.getElementById('payoutProfileList');
+            if (!payoutProfiles.length) { list.innerHTML = '<div class="empty">Payout profile မရှိသေးပါ။</div>'; return; }
+            list.innerHTML = payoutProfiles.map(item => {
+                const status = String(item.verificationStatus || 'pending').toLowerCase();
+                const updated = item.updatedAtIso || (item.updatedAt?.toDate ? item.updatedAt.toDate().toLocaleString() : '');
+                const canReview = status === 'pending';
+                return `<div class="claim-row ${status === 'rejected' ? 'fraud' : ''}">
+                    <div class="claim-head"><strong>${escapeHtml(item.userName || 'အမည်မရှိ')} · ${escapeHtml(item.profileCode || item.userId || 'ID မသိ')}</strong><span class="badge ${claimStatusClass(status)}">${escapeHtml(item.verificationStatus || 'pending')}</span></div>
+                    <div class="claim-meta">Phone: <strong>${escapeHtml(item.phoneNumber || '')}</strong><br>Method: <strong>${escapeHtml(item.payoutMethod || '')}</strong> · Account: <strong>${escapeHtml(item.payoutAccount || '')}</strong><br>ပြင်ဆင်ချိန်: ${escapeHtml(updated)}${item.rejectionReason ? `<br>Reject အကြောင်းပြချက်: ${escapeHtml(item.rejectionReason)}` : ''}</div>
+                    ${canReview ? `<div class="claim-actions"><button type="button" class="approve" data-profile-code="${escapeHtml(item.profileCode || '')}" onclick="verifyPayoutProfile(this.dataset.profileCode)">Verify Payout Info</button><button type="button" class="reject" data-profile-code="${escapeHtml(item.profileCode || '')}" onclick="rejectPayoutProfile(this.dataset.profileCode)">Reject</button></div>` : ''}
+                </div>`;
+            }).join('');
+        }
+
+        function subscribePayoutProfiles(forceRefresh = false) {
+            if (forceRefresh && payoutProfilesUnsubscribe) payoutProfilesUnsubscribe();
+            if (payoutProfilesUnsubscribe && !forceRefresh) return;
+            const list = document.getElementById('payoutProfileList');
+            payoutProfilesUnsubscribe = firestore.collection('referralPayoutProfiles').onSnapshot(snapshot => {
+                payoutProfiles = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => String(b.updatedAtIso || '').localeCompare(String(a.updatedAtIso || '')));
+                renderPayoutProfiles();
+            }, error => {
+                console.warn('Payout profile onSnapshot failed:', error);
+                list.innerHTML = '<div class="detail-empty">Payout profile ဖတ်မရပါ။ Firebase Auth/admin rules ကို စစ်ပါ။</div>';
+            });
+        }
+
+        async function verifyPayoutProfile(profileCode) {
+            if (!profileCode || !window.confirm(`${profileCode} ၏ payout phone/account ကို စစ်ပြီး Verify လုပ်မည်။ ဆက်လုပ်မလား?`)) return;
+            try {
+                await firestore.collection('referralPayoutProfiles').doc(profileCode).update({ verificationStatus: 'verified', verifiedAt: new Date().toISOString(), verifiedBy: 'admin-panel' });
+                setStatus('Payout information ကို Verified လုပ်ပြီးပါပြီ။ ယခု withdrawal request ကို Approve & Paid လုပ်နိုင်ပါပြီ။');
+            } catch (error) { setStatus('Payout info Verify မလုပ်နိုင်ပါ။ Firebase Admin Auth/Rules ကို စစ်ပါ။', true); }
+        }
+
+        async function rejectPayoutProfile(profileCode) {
+            if (!profileCode) return;
+            const reason = window.prompt('Reject အကြောင်းပြချက် (optional)') || '';
+            if (!window.confirm(`${profileCode} ၏ payout information ကို Reject လုပ်မည်။ ဆက်လုပ်မလား?`)) return;
+            try {
+                await firestore.collection('referralPayoutProfiles').doc(profileCode).update({ verificationStatus: 'rejected', rejectionReason: reason, reviewedAt: new Date().toISOString(), reviewedBy: 'admin-panel' });
+                setStatus('Payout information ကို Reject လုပ်ပြီးပါပြီ။');
+            } catch (error) { setStatus('Payout info Reject မလုပ်နိုင်ပါ။ Firebase Admin Auth/Rules ကို စစ်ပါ။', true); }
+        }
+
         async function approveWithdrawRequest(requestId) {
             const request = withdrawRequests.find(item => item.id === requestId);
             if (!request || String(request.status || '').toLowerCase() !== 'pending') return setStatus('ဒီ request ကို ပြန်စိစစ်၍မရပါ။', true);
@@ -574,10 +628,13 @@
             try {
                 const requestRef = firestore.collection('withdraw_requests').doc(requestId);
                 const balanceRef = firestore.collection('referralBalances').doc(request.profileCode || request.userId);
+                const payoutProfileRef = firestore.collection('referralPayoutProfiles').doc(request.profileCode || request.userId);
                 await firestore.runTransaction(async transaction => {
                     const requestSnapshot = await transaction.get(requestRef);
                     const balanceSnapshot = await transaction.get(balanceRef);
+                    const payoutProfileSnapshot = await transaction.get(payoutProfileRef);
                     if (!requestSnapshot.exists || String(requestSnapshot.data()?.status || '').toLowerCase() !== 'pending') throw new Error('REQUEST_ALREADY_REVIEWED');
+                    if (!payoutProfileSnapshot.exists || String(payoutProfileSnapshot.data()?.verificationStatus || '').toLowerCase() !== 'verified') throw new Error('PAYOUT_NOT_VERIFIED');
                     const amount = Number(requestSnapshot.data()?.amount || 0);
                     const balance = balanceSnapshot.exists ? balanceSnapshot.data() || {} : {};
                     if (Number(balance.availableBalance || 0) < amount) throw new Error('INSUFFICIENT_BALANCE');
@@ -589,7 +646,7 @@
                     transaction.set(firestore.collection('referralPayouts').doc(`share_request_${requestId}`), { requestId, profileCode: request.profileCode || request.userId, phoneNumber: request.phoneNumber || '', amount, status: 'approved_paid', paidAt: now, source: 'withdraw_requests' });
                 });
                 setStatus('Share Count request ကို ဖုန်းဘေလ်ပေးချေပြီး Approved/Paid လုပ်ပြီးပါပြီ။');
-            } catch (error) { setStatus(error.message === 'INSUFFICIENT_BALANCE' ? 'လက်ကျန်မလုံလောက်ပါ။' : error.message === 'REQUEST_ALREADY_REVIEWED' ? 'ဒီ request ကို အခြား admin က စိစစ်ပြီးပါပြီ။' : 'Request approve မလုပ်နိုင်ပါ။ Rules/Auth ကို စစ်ပါ။', true); }
+            } catch (error) { setStatus(error.message === 'INSUFFICIENT_BALANCE' ? 'လက်ကျန်မလုံလောက်ပါ။' : error.message === 'PAYOUT_NOT_VERIFIED' ? 'အရင်ဆုံး Payout Info ကို Verify လုပ်ပါ။' : error.message === 'REQUEST_ALREADY_REVIEWED' ? 'ဒီ request ကို အခြား admin က စိစစ်ပြီးပါပြီ။' : 'Request approve မလုပ်နိုင်ပါ။ Rules/Auth ကို စစ်ပါ။', true); }
         }
 
         async function rejectWithdrawRequest(requestId) {

@@ -107,7 +107,8 @@ service cloud.firestore {
         && request.auth.uid == profileCode
         && request.resource.data.profileCode == profileCode
         && request.resource.data.phoneNumber is string
-        && request.resource.data.payoutMethod in ['TrueMoney', 'WavePay', 'KPay'];
+        && request.resource.data.payoutMethod in ['TrueMoney', 'WavePay', 'KPay']
+        && request.resource.data.verificationStatus == 'pending';
       allow delete: if admin();
     }
 
