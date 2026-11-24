@@ -99,6 +99,18 @@ service cloud.firestore {
       allow update, delete: if admin();
     }
 
+    // Payout details may be saved before the user has any balance. Keep the
+    // record private to the owner and Admin; payment is still Admin-reviewed.
+    match /referralPayoutProfiles/{profileCode} {
+      allow read: if admin() || (signedIn() && request.auth.uid == profileCode);
+      allow create, update: if signedIn()
+        && request.auth.uid == profileCode
+        && request.resource.data.profileCode == profileCode
+        && request.resource.data.phoneNumber is string
+        && request.resource.data.payoutMethod in ['TrueMoney', 'WavePay', 'KPay'];
+      allow delete: if admin();
+    }
+
     match /referralWithdrawals/{withdrawalId} {
       allow read: if admin() || (signedIn() && resource.data.referrerCode == request.auth.uid);
       allow create: if signedIn()

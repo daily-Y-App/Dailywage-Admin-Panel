@@ -17,6 +17,7 @@ DailyWage Firebase Realtime Database ထဲရှိ Profile, records, AI chat �
 - Referral link/code, referral attribution, active-user activity summary နှင့် phone reward claims
 - Pending/Paid/Rejected claim status၊ device/phone/self-referral fraud flags နှင့် Approve & Mark Paid/Reject controls
 - Share Count withdrawal request များကို `withdraw_requests` မှ Firestore `onSnapshot()` ဖြင့် real-time ကြည့်ရှုခြင်း၊ Share Count/phone/device/referred summary ပြသခြင်းနှင့် `Approve & Paid`/`Reject` controls
+- User က balance မရသေးခင် ကြိုသိမ်းထားသော `referralPayoutProfiles` မှ TrueMoney/WavePay/KPay payout details ကို Admin စိစစ်နိုင်ခြင်း
 - User row/detail ထဲမှ confirm ပြီး Profile, records, AI chat နှင့် device registry ကို ဖျက်ခြင်း
 
 Password၊ screen lock၊ password reset request နှင့် password reset email စနစ်များ မပါဝင်ပါ။
@@ -42,6 +43,8 @@ Claim တစ်ခုကို `referralClaims/{referredCode}` တွင် သ�
 Approve လုပ်ပြီးသော referral reward သည် `referralBalances/{referrerCode}` တွင် `availableBalance` အဖြစ် တိုးပါသည်။ User သည် Home app မှ ဆုငွေထုတ်ယူရန် request တင်နိုင်ပြီး request ကို `referralWithdrawals/{withdrawalId}` တွင် Pending အဖြစ် သိမ်းပါသည်။ Admin သည် ဖုန်းဘေလ်ကို အမှန်တကယ်ထည့်ပြီး `Deduct Balance & Mark Paid` ကိုနှိပ်မှသာ transaction ဖြင့် `availableBalance` မှ တောင်းခံသည့်ပမာဏကို နုတ်ပြီး Withdrawal/Payout audit record သိမ်းပါသည်။ လက်ကျန်မလုံလောက်ပါက transaction က မအောင်မြင်ဘဲ ငွေမနုတ်ပါ။
 
 Referral claim တစ်ခုကို `Paid` လုပ်သည့် Admin transaction သည် `referralBalances/{referrerCode}.shareCount` ကိုလည်း ၁ တိုးပေးသည်။ Share repo သည် ထို field ကို valid Share Count အဖြစ်ဖတ်ပြီး target ၅ ပြည့်မှသာ `withdraw_requests` ထဲသို့ request တင်ခွင့်ပြုသည်။ Request တွင် `userId`, `profileCode`, `userName`, `phoneNumber`, `shareCountAtRequest`, `referredSummary`, `deviceId`, `amount`, `status: pending` နှင့် `createdAt` ပါသည်။ `withdraw_request_phones` နှင့် `withdraw_request_devices` immutable registry များကို transaction တစ်ခုတည်းအတွင်း ဖန်တီးသဖြင့် ဖုန်း/Device တူ request များကို client ဘက်တွင် ထပ်မတင်နိုင်ပါ။
+
+User သည် Share page ရှိ payout profile form မှ အမည်၊ ဖုန်း၊ TrueMoney/WavePay/KPay နှင့် account ကို balance မရှိသေးခင် ကြိုသိမ်းနိုင်သည်။ ထို data များကို `referralPayoutProfiles/{profileCode}` တွင် owner/Admin သာဖတ်နိုင်အောင် rules ထည့်ထားပြီး actual payout ကို Admin approval မလုပ်မချင်း မလုပ်ဆောင်ပါ။
 
 Admin Panel ၏ `Share Count Withdrawal Requests` section သည် `withdraw_requests` collection ကို `onSnapshot()` ဖြင့် နားထောင်သည်။ `Approve & Paid` လုပ်ရာတွင် request status ကို `approved_paid` ပြောင်းပြီး amount ကို `referralBalances.availableBalance` မှ transaction ဖြင့်နုတ်ကာ `referralPayouts/share_request_{requestId}` audit record သိမ်းသည်။ `Reject` လုပ်လျှင် status ကို `rejected` ပြောင်းသည်။
 
