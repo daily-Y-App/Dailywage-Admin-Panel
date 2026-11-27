@@ -204,6 +204,10 @@
         let withdrawRequestsUnsubscribe = null;
         let payoutProfiles = [];
         let payoutProfilesUnsubscribe = null;
+
+        function payoutProfileFor(code) {
+            return payoutProfiles.find(item => item.profileCode === code || item.id === code) || null;
+        }
         let firebaseAdminUser = null;
 
         auth.onAuthStateChanged(user => {
@@ -589,11 +593,14 @@
                 const status = String(item.status || 'pending').toLowerCase();
                 const canReview = status === 'pending';
                 const summary = item.referredSummary || {};
+                const payout = payoutProfileFor(item.profileCode || item.userId) || {};
+                const payoutStatus = String(payout.verificationStatus || 'မသိရသေးပါ').toLowerCase();
+                const payoutLabel = payout.verificationStatus || 'Payout info မရှိသေးပါ';
                 const created = item.createdAtIso || (item.createdAt?.toDate ? item.createdAt.toDate().toLocaleString() : '');
                 return `<div class="claim-row ${item.deviceId ? '' : 'fraud'}">
                     <div class="claim-head"><strong>${escapeHtml(item.userName || 'အမည်မရှိ')} · ${escapeHtml(item.userId || item.profileCode || 'ID မသိ')}</strong><span class="badge ${claimStatusClass(status)}">${escapeHtml(item.status || 'pending')}</span></div>
-                    <div class="claim-meta">Profile/RC: <strong>${escapeHtml(item.profileCode || item.userId || '')}</strong><br>Phone: <strong>${escapeHtml(item.phoneNumber || '')}</strong> · Email: ${escapeHtml(item.email || 'မထည့်ထားပါ')}<br>Share Count: <strong>${escapeHtml(item.shareCountAtRequest || 0)}</strong> / Target ${escapeHtml(summary.targetCount || 5)} · Amount: <strong>${escapeHtml(item.amount || 0)}฿</strong><br>Referred summary: valid ${escapeHtml(summary.validShareCount || item.shareCountAtRequest || 0)}, remaining ${escapeHtml(summary.remaining || 0)}, balance ${escapeHtml(summary.balanceAtRequest || 0)}฿<br>Device ID: <strong>${escapeHtml(item.deviceId || 'မသိရသေးပါ')}</strong><br>တင်သည့်အချိန်: ${escapeHtml(created)}</div>
-                    ${canReview ? `<div class="claim-actions"><button type="button" class="approve" data-request-id="${escapeHtml(item.id)}" onclick="approveWithdrawRequest(this.dataset.requestId)">Approve &amp; Paid</button><button type="button" class="reject" data-request-id="${escapeHtml(item.id)}" onclick="rejectWithdrawRequest(this.dataset.requestId)">Reject</button></div>` : ''}
+                    <div class="claim-meta">Profile/RC: <strong>${escapeHtml(item.profileCode || item.userId || '')}</strong><br>Phone: <strong>${escapeHtml(item.phoneNumber || '')}</strong> · Email: ${escapeHtml(item.email || 'မထည့်ထားပါ')}<br>💳 Payout: <strong>${escapeHtml(payout.payoutMethod || item.payoutMethod || 'မရွေးရသေးပါ')}</strong> · Account: <strong>${escapeHtml(payout.payoutAccount || item.payoutAccount || 'မထည့်ရသေးပါ')}</strong><br>Info status: <strong>${escapeHtml(payoutLabel)}</strong>${payout.rejectionReason ? ` · ${escapeHtml(payout.rejectionReason)}` : ''}<br>Share Count: <strong>${escapeHtml(item.shareCountAtRequest || 0)}</strong> / Target ${escapeHtml(summary.targetCount || 5)} · Amount: <strong>${escapeHtml(item.amount || 0)}฿</strong><br>Referred summary: valid ${escapeHtml(summary.validShareCount || item.shareCountAtRequest || 0)}, remaining ${escapeHtml(summary.remaining || 0)}, balance ${escapeHtml(summary.balanceAtRequest || 0)}฿<br>Device ID: <strong>${escapeHtml(item.deviceId || 'မသိရသေးပါ')}</strong><br>တင်သည့်အချိန်: ${escapeHtml(created)}</div>
+                    ${canReview ? `<div class="claim-actions">${payoutStatus !== 'verified' ? `<button type="button" class="approve" data-profile-code="${escapeHtml(item.profileCode || item.userId || '')}" onclick="verifyPayoutProfile(this.dataset.profileCode)">အရင် Verify လုပ်မည်</button>` : `<button type="button" class="approve" data-request-id="${escapeHtml(item.id)}" onclick="approveWithdrawRequest(this.dataset.requestId)">ငွေထည့်ပြီး Approve &amp; Paid</button>`}<button type="button" class="reject" data-request-id="${escapeHtml(item.id)}" onclick="rejectWithdrawRequest(this.dataset.requestId)">Reject</button></div>` : ''}
                 </div>`;
             }).join('');
         }
@@ -633,6 +640,7 @@
             payoutProfilesUnsubscribe = firestore.collection('referralPayoutProfiles').onSnapshot(snapshot => {
                 payoutProfiles = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => String(b.updatedAtIso || '').localeCompare(String(a.updatedAtIso || '')));
                 renderPayoutProfiles();
+                renderWithdrawRequests();
             }, error => {
                 console.warn('Payout profile onSnapshot failed:', error);
                 list.innerHTML = '<div class="detail-empty">Payout profile ဖတ်မရပါ။ Firebase Auth/admin rules ကို စစ်ပါ။</div>';
