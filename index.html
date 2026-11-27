@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DailyWage Admin Profile Inspector</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
     <style>
@@ -107,9 +108,11 @@
             <h2>🔐 Admin PIN</h2>
             <p>Profile directory ကိုကြည့်ရန် Admin PIN ထည့်ပါ။</p>
             <input id="pinInput" class="pin-input" type="password" inputmode="numeric" maxlength="8" placeholder="PIN" autocomplete="off">
+            <input id="adminEmail" type="email" placeholder="Firebase Admin Email" autocomplete="username" style="width:100%;margin-top:10px;">
+            <input id="adminPassword" type="password" placeholder="Firebase Password" autocomplete="current-password" style="width:100%;margin-top:8px;">
             <button id="pinButton" class="pin-button" type="button" onclick="unlockAdmin()">ဝင်မည်</button>
             <div id="pinError" class="pin-error"></div>
-            <div class="lock-note">PIN စစ်ဆေးမှုသည် page အတွင်းတွင်သာ လုပ်ဆောင်သည်။ အမှန်တကယ်လုံခြုံရေးအတွက် Firebase Authentication နှင့် Admin Rules လိုအပ်ပါသည်။</div>
+            <div class="lock-note">PIN နှင့် Firebase Admin Email/Password နှစ်ခုလုံး လိုအပ်ပါသည်။ Firebase Auth account တွင် <code>admin: true</code> custom claim ရှိမှ payout data ဖတ်/ပြင်နိုင်ပါမည်။</div>
         </section>
 
         <section id="adminPanel" hidden>
@@ -189,6 +192,7 @@
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
         const firestore = firebase.firestore();
+        const auth = firebase.auth();
 
         const ADMIN_PIN_HASH = '08f8881ee389cd2dbc13b3adb69030273cc675e1d5dac1d58004e70444fb11e4';
         let profileUsers = [];
@@ -200,6 +204,15 @@
         let withdrawRequestsUnsubscribe = null;
         let payoutProfiles = [];
         let payoutProfilesUnsubscribe = null;
+        let firebaseAdminUser = null;
+
+        auth.onAuthStateChanged(user => {
+            firebaseAdminUser = user || null;
+            if (user) {
+                const email = document.getElementById('adminEmail');
+                if (email && !email.value) email.value = user.email || '';
+            }
+        });
 
         async function loadDeviceCount() {
             try {
@@ -281,6 +294,29 @@
                 if ((await hashPin(input.value.trim())) !== ADMIN_PIN_HASH) {
                     error.innerText = 'PIN မမှန်ပါ။';
                     input.value = '';
+                    return;
+                }
+                const email = String(document.getElementById('adminEmail').value || '').trim();
+                const password = String(document.getElementById('adminPassword').value || '');
+                if (!firebaseAdminUser) {
+                    if (!email || !password) {
+                        error.innerText = 'PIN အပြင် Firebase Admin Email နှင့် Password ထည့်ပါ။';
+                        return;
+                    }
+                    try {
+                        await auth.signInWithEmailAndPassword(email, password);
+                    } catch (authError) {
+                        console.error(authError);
+                        error.innerText = authError.code === 'auth/user-not-found' || authError.code === 'auth/wrong-password'
+                            ? 'Firebase Email သို့မဟုတ် Password မမှန်ပါ။'
+                            : 'Firebase Auth login မအောင်မြင်ပါ။ Firebase Console တွင် Email/Password provider ကို ဖွင့်ထားပါ။';
+                        return;
+                    }
+                }
+                const token = await firebase.auth().currentUser.getIdTokenResult(true);
+                if (token.claims.admin !== true) {
+                    error.innerText = 'ဒီ Firebase account တွင် admin custom claim မရှိသေးပါ။';
+                    await auth.signOut();
                     return;
                 }
                 sessionStorage.setItem('dailywageAdminUnlocked', '1');

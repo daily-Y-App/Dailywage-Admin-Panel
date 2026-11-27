@@ -22,6 +22,12 @@ DailyWage Firebase Realtime Database ထဲရှိ Profile, records, AI chat �
 
 Password၊ screen lock၊ password reset request နှင့် password reset email စနစ်များ မပါဝင်ပါ။
 
+## Payout profile read error ဖြေရှင်းရန်
+
+`Payout profile ဖတ်မရပါ။ Firebase Auth/admin rules ကို စစ်ပါ။` ဟုပြလျှင် Admin Panel ကို PIN ဖြင့်သာ unlock လုပ်ထားပြီး Firestore အတွက် Firebase Auth session မရှိခြင်း ဖြစ်နိုင်သည်။ Admin Panel တွင် ယခု PIN အပြင် Firebase Admin Email/Password ဖြည့်ပြီး login လုပ်ရသည်။ ထို Firebase Authentication user ၏ custom claims တွင် `{ "admin": true }` ပါရမည်။ Claim မရှိပါက Firestore `admin()` rule က `referralPayoutProfiles`, `withdraw_requests` နှင့် balance/payout collections များကို ဖတ်ခွင့်မပေးပါ။
+
+Firebase Console တွင် `Authentication > Sign-in method > Email/Password` ကို enable လုပ်ပြီး Admin user တစ်ခုဖန်တီးပါ။ ထို့နောက် server-side Firebase Admin SDK ဖြင့် `setCustomUserClaims(uid, {admin: true})` တစ်ကြိမ်လုပ်ပြီး ပြန်ဝင်ပါ။ Browser PIN သည် UI gate သာဖြစ်ပြီး Firestore admin permission မဟုတ်ပါ။
+
 ## Device registry
 
 Main DailyWage app သည် screen, CPU cores, browser/device signals, timezone, language နှင့် canvas signal များကို hash ပြုလုပ်ပြီး Firestore `devices/{deviceId}` တွင် registry သိမ်းပါသည်။ Device ID တူပါက Admin list တွင် profile duplicate မဖြစ်အောင် တစ်ခုတည်းအဖြစ် စုစည်းပြပါသည်။ Browser/OS ပြောင်းလဲမှုများကြောင့် fingerprint သည် 100% အမြဲမတည်မြဲနိုင်သော best-effort deduplication ဖြစ်သည်။
