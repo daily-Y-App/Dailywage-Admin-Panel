@@ -2,7 +2,13 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
-    function admin() { return signedIn() && request.auth.token.admin == true; }
+    // Temporary migration fallback for the existing Admin account. Replace
+    // this email clause with the custom claim only after claims are configured.
+    function admin() {
+      return signedIn()
+        && (request.auth.token.admin == true
+          || request.auth.token.email == 'dailywage172@gmail.com');
+    }
 
     // The Home app should use Firebase Auth (anonymous or custom-token) before
     // enabling these production rules. Do not use a client-side PIN as proof of admin.

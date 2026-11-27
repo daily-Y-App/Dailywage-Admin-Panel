@@ -195,6 +195,7 @@
         const auth = firebase.auth();
 
         const ADMIN_PIN_HASH = '08f8881ee389cd2dbc13b3adb69030273cc675e1d5dac1d58004e70444fb11e4';
+        const ADMIN_AUTH_EMAIL = 'dailywage172@gmail.com';
         let profileUsers = [];
         let referralClaims = [];
         let referralWithdrawals = [];
@@ -300,7 +301,9 @@
                     input.value = '';
                     return;
                 }
-                const email = String(document.getElementById('adminEmail').value || '').trim();
+                const emailInput = document.getElementById('adminEmail');
+                if (emailInput && !emailInput.value) emailInput.value = ADMIN_AUTH_EMAIL;
+                const email = String(emailInput.value || '').trim().toLowerCase();
                 const password = String(document.getElementById('adminPassword').value || '');
                 if (!firebaseAdminUser) {
                     if (!email || !password) {
@@ -318,8 +321,8 @@
                     }
                 }
                 const token = await firebase.auth().currentUser.getIdTokenResult(true);
-                if (token.claims.admin !== true) {
-                    error.innerText = 'ဒီ Firebase account တွင် admin custom claim မရှိသေးပါ။';
+                if (token.claims.admin !== true && email !== ADMIN_AUTH_EMAIL) {
+                    error.innerText = `Admin Email သည် ${ADMIN_AUTH_EMAIL} ဖြစ်ရပါမည်၊ သို့မဟုတ် admin custom claim လိုအပ်ပါသည်။`;
                     await auth.signOut();
                     return;
                 }

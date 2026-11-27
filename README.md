@@ -30,6 +30,8 @@ Share page မှ payout profile သိမ်းပြီး Admin မှ မမ
 
 Firebase Console တွင် `Authentication > Sign-in method > Email/Password` ကို enable လုပ်ပြီး Admin user တစ်ခုဖန်တီးပါ။ ထို့နောက် server-side Firebase Admin SDK ဖြင့် `setCustomUserClaims(uid, {admin: true})` တစ်ကြိမ်လုပ်ပြီး ပြန်ဝင်ပါ။ Browser PIN သည် UI gate သာဖြစ်ပြီး Firestore admin permission မဟုတ်ပါ။
 
+ယာယီ migration အတွက် Rules ထဲတွင် `dailywage172@gmail.com` ကို Admin email fallback အဖြစ် ထည့်ထားသည်။ ထို့ကြောင့် Firebase Auth တွင် ထို email account ရှိပြီး Password ဖြင့် login ဝင်နိုင်ရမည်။ Code push လုပ်ရုံဖြင့် Firestore Rules မပြောင်းပါ—Firebase Console > Firestore Database > Rules ထဲမှ repository ရှိ `firestore.rules` အသစ်ကို copy/paste လုပ်ပြီး **Publish** လုပ်ရမည်။ Publish မလုပ်ရသေးလျှင် `Payout profile ဖတ်မရပါ...` error ဆက်ပေါ်မည်။
+
 ## Device registry
 
 Main DailyWage app သည် screen, CPU cores, browser/device signals, timezone, language နှင့် canvas signal များကို hash ပြုလုပ်ပြီး Firestore `devices/{deviceId}` တွင် registry သိမ်းပါသည်။ Device ID တူပါက Admin list တွင် profile duplicate မဖြစ်အောင် တစ်ခုတည်းအဖြစ် စုစည်းပြပါသည်။ Browser/OS ပြောင်းလဲမှုများကြောင့် fingerprint သည် 100% အမြဲမတည်မြဲနိုင်သော best-effort deduplication ဖြစ်သည်။
