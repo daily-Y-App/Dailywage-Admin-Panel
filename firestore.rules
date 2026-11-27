@@ -103,12 +103,19 @@ service cloud.firestore {
     // record private to the owner and Admin; payment is still Admin-reviewed.
     match /referralPayoutProfiles/{profileCode} {
       allow read: if admin() || (signedIn() && request.auth.uid == profileCode);
-      allow create, update: if signedIn()
-        && request.auth.uid == profileCode
-        && request.resource.data.profileCode == profileCode
+      // Share is a standalone landing page and currently has no user Auth
+      // session. Permit only a pending profile write; Admin remains the only
+      // reader/reviewer. A verified profile cannot be overwritten by a client.
+      allow create: if request.resource.data.profileCode == profileCode
+        && request.resource.data.verificationStatus == 'pending'
         && request.resource.data.phoneNumber is string
-        && request.resource.data.payoutMethod in ['TrueMoney', 'WavePay', 'KPay']
-        && request.resource.data.verificationStatus == 'pending';
+        && request.resource.data.payoutMethod in ['TrueMoney', 'WavePay', 'KPay'];
+      allow update: if admin()
+        || (request.resource.data.profileCode == profileCode
+          && request.resource.data.phoneNumber is string
+          && request.resource.data.payoutMethod in ['TrueMoney', 'WavePay', 'KPay']
+          && request.resource.data.verificationStatus == 'pending'
+          && resource.data.verificationStatus != 'verified');
       allow delete: if admin();
     }
 

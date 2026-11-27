@@ -26,6 +26,8 @@ Password၊ screen lock၊ password reset request နှင့် password reset
 
 `Payout profile ဖတ်မရပါ။ Firebase Auth/admin rules ကို စစ်ပါ။` ဟုပြလျှင် Admin Panel ကို PIN ဖြင့်သာ unlock လုပ်ထားပြီး Firestore အတွက် Firebase Auth session မရှိခြင်း ဖြစ်နိုင်သည်။ Admin Panel တွင် ယခု PIN အပြင် Firebase Admin Email/Password ဖြည့်ပြီး login လုပ်ရသည်။ ထို Firebase Authentication user ၏ custom claims တွင် `{ "admin": true }` ပါရမည်။ Claim မရှိပါက Firestore `admin()` rule က `referralPayoutProfiles`, `withdraw_requests` နှင့် balance/payout collections များကို ဖတ်ခွင့်မပေးပါ။
 
+Share page မှ payout profile သိမ်းပြီး Admin မှ မမြင်ရပါက Firebase Console တွင် ပြင်ထားသော `firestore.rules` ကို deploy မလုပ်ရသေးခြင်း သို့မဟုတ် Admin Firebase Auth custom claim မရှိခြင်းကို စစ်ပါ။ Cloud save အောင်မြင်လျှင် `referralPayoutProfiles/{profileCode}` တွင် `verificationStatus: pending` ဖြင့် ချက်ချင်းပေါ်ရမည်။ User-side standalone Share page သည် Auth မချိတ်ထားသေးသောကြောင့် `pending` create/update ကိုသာ ခွင့်ပြုပြီး read/verify/payout action များကို Admin-only ထားထားသည်။
+
 Firebase Console တွင် `Authentication > Sign-in method > Email/Password` ကို enable လုပ်ပြီး Admin user တစ်ခုဖန်တီးပါ။ ထို့နောက် server-side Firebase Admin SDK ဖြင့် `setCustomUserClaims(uid, {admin: true})` တစ်ကြိမ်လုပ်ပြီး ပြန်ဝင်ပါ။ Browser PIN သည် UI gate သာဖြစ်ပြီး Firestore admin permission မဟုတ်ပါ။
 
 ## Device registry
